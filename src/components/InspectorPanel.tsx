@@ -19,7 +19,11 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { Bubble, BubbleSideStyle, CanvasConfig, CardThemeId, DefaultSideStyles, WebFont } from '../types';
-import { COLOR_PALETTE } from '../data/presetFonts';
+import {
+  COLOR_PALETTE,
+  DEFAULT_META_FONT_FAMILY,
+  getMetaOrderedFonts,
+} from '../data/presetFonts';
 import {
   formatSelection,
   getSelectionWithinBubble,
@@ -385,6 +389,194 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   className="w-full resize-y rounded-lg border border-stone-200 p-2.5 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"
                   placeholder="대사 텍스트를 입력하세요"
                 />
+              </div>
+
+              {/* 1.5 Speaker Name & Date Section */}
+              <div className="space-y-3 rounded-xl border border-stone-200 bg-stone-50/60 p-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-stone-700">
+                    이름/시간 표시
+                  </label>
+                  <div className="flex rounded-lg border border-stone-200 bg-white p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => onUpdateBubble({ showMeta: true })}
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer ${
+                        Boolean(
+                          selectedBubble.showMeta ??
+                            Boolean(selectedBubble.speaker || selectedBubble.dateText)
+                        )
+                          ? 'bg-stone-900 text-white shadow-2xs'
+                          : 'text-stone-600 hover:text-stone-900'
+                      }`}
+                    >
+                      ON
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateBubble({ showMeta: false })}
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer ${
+                        !Boolean(
+                          selectedBubble.showMeta ??
+                            Boolean(selectedBubble.speaker || selectedBubble.dateText)
+                        )
+                          ? 'bg-stone-900 text-white shadow-2xs'
+                          : 'text-stone-600 hover:text-stone-900'
+                      }`}
+                    >
+                      OFF
+                    </button>
+                  </div>
+                </div>
+
+                {Boolean(
+                  selectedBubble.showMeta ??
+                    Boolean(selectedBubble.speaker || selectedBubble.dateText)
+                ) && (
+                  <div className="space-y-3 pt-1 border-t border-stone-200/80">
+                    {/* Theme Selector (2 Versions) */}
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-medium text-stone-600">
+                        표시 테마
+                      </span>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onUpdateBubble({
+                              showMeta: true,
+                              metaTheme: 'outside',
+                            })
+                          }
+                          className={`rounded-lg border px-2.5 py-1.5 text-center text-xs font-semibold transition cursor-pointer ${
+                            (selectedBubble.metaTheme || 'inside') === 'outside'
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                          }`}
+                        >
+                          메신저
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onUpdateBubble({
+                              showMeta: true,
+                              metaTheme: 'inside',
+                            })
+                          }
+                          className={`rounded-lg border px-2.5 py-1.5 text-center text-xs font-semibold transition cursor-pointer ${
+                            (selectedBubble.metaTheme || 'inside') === 'inside'
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                          }`}
+                        >
+                          이체통
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Name & Date Inputs */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-stone-600">
+                          이름
+                        </label>
+                        <input
+                          type="text"
+                          value={selectedBubble.speaker || ''}
+                          onChange={(e) =>
+                            onUpdateBubble({
+                              showMeta: true,
+                              speaker: e.target.value,
+                            })
+                          }
+                          className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-stone-600">
+                          시간
+                        </label>
+                        <input
+                          type="text"
+                          value={selectedBubble.dateText || ''}
+                          onChange={(e) =>
+                            onUpdateBubble({
+                              showMeta: true,
+                              dateText: e.target.value,
+                            })
+                          }
+                          className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Separate Font Family for Name/Date */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-medium text-stone-600">
+                          폰트
+                        </label>
+                      </div>
+                      <FontSelectDropdown
+                        fonts={getMetaOrderedFonts(fonts)}
+                        value={
+                          selectedBubble.metaFontFamily ||
+                          DEFAULT_META_FONT_FAMILY
+                        }
+                        onChange={(metaFontFamily) =>
+                          onUpdateBubble({ metaFontFamily })
+                        }
+                      />
+                    </div>
+
+                    {/* Separate Color for Name/Date */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-medium text-stone-600">
+                        색상
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={
+                            selectedBubble.metaColor ||
+                            (selectedBubble.align === 'right'
+                              ? '#cdaf77'
+                              : '#777674')
+                          }
+                          onChange={(e) =>
+                            onUpdateBubble({ metaColor: e.target.value })
+                          }
+                          className="h-7 w-7 cursor-pointer rounded border border-stone-200 bg-white p-0.5"
+                        />
+                        <div className="flex flex-1 flex-wrap gap-1">
+                          {COLOR_PALETTE.metaText.map((c) => (
+                            <button
+                              key={c.value}
+                              type="button"
+                              onClick={() =>
+                                onUpdateBubble({ metaColor: c.value })
+                              }
+                              style={{ backgroundColor: c.value }}
+                              title={c.label}
+                              className={`h-5 w-5 rounded-full border border-stone-300 transition-transform cursor-pointer ${
+                                (
+                                  selectedBubble.metaColor ||
+                                  (selectedBubble.align === 'right'
+                                    ? '#cdaf77'
+                                    : '#777674')
+                                ).toLowerCase() === c.value.toLowerCase()
+                                  ? 'scale-110 ring-2 ring-stone-900'
+                                  : 'hover:scale-105'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 2. Font Selector with "기본폰트로 초기화" Button */}
@@ -902,18 +1094,6 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     </div>
                   </div>
                 )}
-              </div>
-
-              {/* 8. Speaker Name */}
-              <div className="space-y-1.5 pt-2 border-t border-stone-100">
-                <label className="text-xs font-semibold text-stone-600">화자 이름 (선택)</label>
-                <input
-                  type="text"
-                  placeholder=""
-                  value={selectedBubble.speaker || ''}
-                  onChange={(e) => onUpdateBubble({ speaker: e.target.value })}
-                  className="w-full rounded-lg border border-stone-200 px-3 py-1.5 text-xs text-stone-800 placeholder-stone-400 focus:border-stone-800 focus:outline-none"
-                />
               </div>
             </>
           ) : (

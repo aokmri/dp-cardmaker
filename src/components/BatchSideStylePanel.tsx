@@ -17,7 +17,11 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { Bubble, BubbleSideStyle, DefaultSideStyles, WebFont } from '../types';
-import { COLOR_PALETTE } from '../data/presetFonts';
+import {
+  COLOR_PALETTE,
+  DEFAULT_META_FONT_FAMILY,
+  getMetaOrderedFonts,
+} from '../data/presetFonts';
 import { FontPasteMatcher } from './FontPasteMatcher';
 import { FontSelectDropdown } from './FontSelectDropdown';
 
@@ -232,6 +236,178 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
             <span className="hidden sm:inline">원래대로</span>
           </button>
         </div>
+      </div>
+
+      {/* 0.5. Speaker Name & Date Batch Settings */}
+      <div className="space-y-3 rounded-xl border border-stone-200 bg-stone-50/60 p-3">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-semibold text-stone-700">
+            이름/시간 표시
+          </label>
+          <div className="flex rounded-lg border border-stone-200 bg-white p-0.5">
+            <button
+              type="button"
+              onClick={() => onUpdateSideStyle(activeSide, { showMeta: true })}
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer ${
+                Boolean(currentStyle.showMeta)
+                  ? 'bg-stone-900 text-white shadow-2xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              ON
+            </button>
+            <button
+              type="button"
+              onClick={() => onUpdateSideStyle(activeSide, { showMeta: false })}
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer ${
+                !Boolean(currentStyle.showMeta)
+                  ? 'bg-stone-900 text-white shadow-2xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              OFF
+            </button>
+          </div>
+        </div>
+
+        {Boolean(currentStyle.showMeta) && (
+          <div className="space-y-3 pt-1 border-t border-stone-200/80">
+            {/* Theme Selector (2 Versions) */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-medium text-stone-600">
+                표시 테마
+              </span>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onUpdateSideStyle(activeSide, {
+                      showMeta: true,
+                      metaTheme: 'outside',
+                    })
+                  }
+                  className={`rounded-lg border px-2.5 py-1.5 text-center text-xs font-semibold transition cursor-pointer ${
+                    (currentStyle.metaTheme || 'inside') === 'outside'
+                      ? 'border-stone-900 bg-stone-900 text-white'
+                      : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                  }`}
+                >
+                  메신저
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    onUpdateSideStyle(activeSide, {
+                      showMeta: true,
+                      metaTheme: 'inside',
+                    })
+                  }
+                  className={`rounded-lg border px-2.5 py-1.5 text-center text-xs font-semibold transition cursor-pointer ${
+                    (currentStyle.metaTheme || 'inside') === 'inside'
+                      ? 'border-stone-900 bg-stone-900 text-white'
+                      : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                  }`}
+                >
+                  이체통
+                </button>
+              </div>
+            </div>
+
+            {/* Name & Date Inputs */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-stone-600">
+                  이름
+                </label>
+                <input
+                  type="text"
+                  value={currentStyle.speaker || ''}
+                  onChange={(e) =>
+                    onUpdateSideStyle(activeSide, {
+                      showMeta: true,
+                      speaker: e.target.value,
+                    })
+                  }
+                  className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-stone-600">
+                  시간
+                </label>
+                <input
+                  type="text"
+                  value={currentStyle.dateText || ''}
+                  onChange={(e) =>
+                    onUpdateSideStyle(activeSide, {
+                      showMeta: true,
+                      dateText: e.target.value,
+                    })
+                  }
+                  className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Separate Font Family for Name/Date */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-medium text-stone-600">
+                  폰트
+                </label>
+              </div>
+              <FontSelectDropdown
+                fonts={getMetaOrderedFonts(fonts)}
+                value={currentStyle.metaFontFamily || DEFAULT_META_FONT_FAMILY}
+                onChange={(metaFontFamily) =>
+                  onUpdateSideStyle(activeSide, { metaFontFamily })
+                }
+              />
+            </div>
+
+            {/* Separate Color for Name/Date */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-stone-600">
+                색상
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={
+                    currentStyle.metaColor ||
+                    (activeSide === 'right' ? '#cdaf77' : '#777674')
+                  }
+                  onChange={(e) =>
+                    onUpdateSideStyle(activeSide, { metaColor: e.target.value })
+                  }
+                  className="h-7 w-7 cursor-pointer rounded border border-stone-200 bg-white p-0.5"
+                />
+                <div className="flex flex-1 flex-wrap gap-1">
+                  {COLOR_PALETTE.metaText.map((c) => (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() =>
+                        onUpdateSideStyle(activeSide, { metaColor: c.value })
+                      }
+                      style={{ backgroundColor: c.value }}
+                      title={c.label}
+                      className={`h-5 w-5 rounded-full border border-stone-300 transition-transform cursor-pointer ${
+                        (
+                          currentStyle.metaColor ||
+                          (activeSide === 'right' ? '#cdaf77' : '#777674')
+                        ).toLowerCase() === c.value.toLowerCase()
+                          ? 'scale-110 ring-2 ring-stone-900'
+                          : 'hover:scale-105'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 1. Font Family */}

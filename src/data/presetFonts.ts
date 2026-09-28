@@ -1,5 +1,7 @@
 import { Bubble, CanvasConfig, WebFont, DefaultSideStyles } from '../types';
 
+export const DEFAULT_META_FONT_FAMILY = "'KimJeongCheolHandwriting', sans-serif";
+
 export const INITIAL_SIDE_STYLES: DefaultSideStyles = {
   left: {
     fontFamily: "'KyoboHandwriting2020ParkDoYeon', sans-serif",
@@ -22,6 +24,12 @@ export const INITIAL_SIDE_STYLES: DefaultSideStyles = {
     borderColor: '#E5DED3',
     letterSpacing: 0.5,
     lineHeight: 1.5,
+    showMeta: false,
+    speaker: '',
+    dateText: '',
+    metaTheme: 'inside',
+    metaFontFamily: DEFAULT_META_FONT_FAMILY,
+    metaColor: '#777674',
   },
   center: {
     fontFamily: "'Iropke Batang', serif",
@@ -44,6 +52,12 @@ export const INITIAL_SIDE_STYLES: DefaultSideStyles = {
     borderColor: '#E5DED3',
     letterSpacing: 0.5,
     lineHeight: 1.5,
+    showMeta: false,
+    speaker: '',
+    dateText: '',
+    metaTheme: 'outside',
+    metaFontFamily: DEFAULT_META_FONT_FAMILY,
+    metaColor: '#777674',
   },
   right: {
     fontFamily: "'JoyBrightness', sans-serif",
@@ -66,10 +80,34 @@ export const INITIAL_SIDE_STYLES: DefaultSideStyles = {
     borderColor: '#E5DED3',
     letterSpacing: 0.5,
     lineHeight: 1.5,
+    showMeta: false,
+    speaker: '',
+    dateText: '',
+    metaTheme: 'inside',
+    metaFontFamily: DEFAULT_META_FONT_FAMILY,
+    metaColor: '#cdaf77',
   },
 };
 
 export const PRESET_FONTS: WebFont[] = [
+  {
+    id: 'wanted-sans',
+    name: 'Wanted Sans',
+    family: "'Wanted Sans Variable', 'Wanted Sans', sans-serif",
+    category: 'sans',
+    sourceType: 'url',
+    url: 'https://cdn.jsdelivr.net/gh/wanteddev/wanted-sans@v1.0.1/packages/wanted-sans/fonts/webfonts/variable/split/WantedSansVariable.min.css',
+    cssRule: `@import url('https://cdn.jsdelivr.net/gh/wanteddev/wanted-sans@v1.0.1/packages/wanted-sans/fonts/webfonts/variable/split/WantedSansVariable.min.css');`,
+  },
+  {
+    id: 'noto-sans-kr',
+    name: 'Noto Sans KR',
+    family: "'Noto Sans KR', sans-serif",
+    category: 'sans',
+    sourceType: 'google',
+    url: 'https://fonts.googleapis.com/earlyaccess/notosanskr.css',
+    cssRule: `@import url('//fonts.googleapis.com/earlyaccess/notosanskr.css');`,
+  },
   {
     id: 'nanum-pen',
     name: '나눔손글씨 펜체',
@@ -1966,6 +2004,11 @@ export const INITIAL_BUBBLES: Bubble[] = [
     borderColor: '#E5DED3',
     letterSpacing: 0.5,
     lineHeight: 1.5,
+    showMeta: false,
+    dateText: '',
+    metaTheme: 'outside',
+    metaFontFamily: DEFAULT_META_FONT_FAMILY,
+    metaColor: '#777674',
   },
   {
     id: 'b-2',
@@ -1995,6 +2038,11 @@ export const INITIAL_BUBBLES: Bubble[] = [
     borderColor: '#E5DED3',
     letterSpacing: 0.5,
     lineHeight: 1.5,
+    showMeta: false,
+    dateText: '',
+    metaTheme: 'inside',
+    metaFontFamily: DEFAULT_META_FONT_FAMILY,
+    metaColor: '#777674',
   },
   {
     id: 'b-3',
@@ -2024,6 +2072,11 @@ export const INITIAL_BUBBLES: Bubble[] = [
     borderColor: '#E5DED3',
     letterSpacing: 0.5,
     lineHeight: 1.5,
+    showMeta: false,
+    dateText: '',
+    metaTheme: 'inside',
+    metaFontFamily: DEFAULT_META_FONT_FAMILY,
+    metaColor: '#cdaf77',
   },
 ];
 
@@ -2034,6 +2087,14 @@ export const COLOR_PALETTE = {
     { label: '깊은 남빛', value: '#233045' },
     { label: '고서 인주빛', value: '#823737' },
     { label: '솔잎 녹색', value: '#2F483A' },
+  ],
+  metaText: [
+    { label: '구버전A', value: '#777674' },
+    { label: '구버전B', value: '#cdaf77' },
+    { label: '기본화이트', value: '#665c52' },
+    { label: '기본다크', value: '#51382a' },
+    { label: '순백색', value: '#FFFFFF' },
+    { label: '순흑색', value: '#000000' },
   ],
   bubbleBg: [
     { label: '투명', value: 'transparent' },
@@ -2054,3 +2115,34 @@ export const COLOR_PALETTE = {
     { label: '라인', value: '#8CABD9' },
   ],
 };
+
+const META_PRIORITY_FONT_IDS = [
+  'kim-jeong-cheol-handwriting',
+  'wanted-sans',
+  'noto-sans-kr',
+  'gaegu',
+  'nanum-pen',
+];
+
+export function getMetaOrderedFonts(fonts: WebFont[]): WebFont[] {
+  const priorityMap = new Map<string, WebFont>();
+  const remaining: WebFont[] = [];
+  const prioritySet = new Set(META_PRIORITY_FONT_IDS);
+
+  for (const f of fonts) {
+    if (prioritySet.has(f.id)) {
+      priorityMap.set(f.id, f);
+    } else {
+      remaining.push(f);
+    }
+  }
+
+  const topFonts: WebFont[] = [];
+  for (const id of META_PRIORITY_FONT_IDS) {
+    const found = priorityMap.get(id);
+    if (found) topFonts.push(found);
+  }
+
+  remaining.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  return [...topFonts, ...remaining];
+}

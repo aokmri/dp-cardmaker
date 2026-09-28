@@ -598,7 +598,7 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
                                   className="text-sm text-stone-700 truncate pt-0.5"
                                   style={{ fontFamily: matched.family }}
                                 >
-                                  {detectPreviewPhrase}
+                                  {detectInput.trim().slice(0, 50) || previewText}
                                 </p>
                               )}
                             </div>

@@ -10,6 +10,7 @@ import {
   WebFont,
 } from './types';
 import {
+  DEFAULT_META_FONT_FAMILY,
   PRESET_FONTS,
   INITIAL_BUBBLES,
   INITIAL_CANVAS_CONFIG,
@@ -19,6 +20,7 @@ import {
   getStoredCustomFonts,
   getSafeFontEmbedCSS,
   injectPresetFonts,
+  saveCustomFont,
 } from './utils/fontLoader';
 import { CanvasCard } from './components/CanvasCard';
 import { HeaderToolbar } from './components/HeaderToolbar';
@@ -26,13 +28,14 @@ import { InspectorPanel } from './components/InspectorPanel';
 import { MobileBottomToolbar } from './components/MobileBottomToolbar';
 import { FontManagerModal } from './components/FontManagerModal';
 import { TextImportModal } from './components/TextImportModal';
-import { Info } from 'lucide-react';
+import { StylePresetModal } from './components/StylePresetModal';
+import { Info, Plus } from 'lucide-react';
 
 export default function App() {
   // Load saved styles with complete defaults for left, center, right
   const loadSavedSideStyles = (): DefaultSideStyles => {
     try {
-      const saved = localStorage.getItem('manhwa_default_side_styles_v4');
+      const saved = localStorage.getItem('manhwa_default_side_styles_v5');
       if (saved) {
         const parsed = JSON.parse(saved);
         return {
@@ -53,6 +56,7 @@ export default function App() {
   const [fonts, setFonts] = useState<WebFont[]>(PRESET_FONTS);
   const [isFontModalOpen, setIsFontModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isStylePresetModalOpen, setIsStylePresetModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [copiedSuccess, setCopiedSuccess] = useState(false);
   const [zoomLevel] = useState(1);
@@ -171,7 +175,7 @@ export default function App() {
   // Save default side styles to local storage
   useEffect(() => {
     try {
-      localStorage.setItem('manhwa_default_side_styles_v4', JSON.stringify(savedSideStyles));
+      localStorage.setItem('manhwa_default_side_styles_v5', JSON.stringify(savedSideStyles));
     } catch {
       // ignore
     }
@@ -200,7 +204,6 @@ export default function App() {
     const newBubble: Bubble = {
       id: `b-${Date.now()}`,
       text: '새 문장을 적어보세요.',
-      speaker: '',
       align: nextAlign,
       x: nextAlign === 'left' ? 8 : nextAlign === 'right' ? 45 : 26,
       y: newY,
@@ -225,6 +228,13 @@ export default function App() {
       borderColor: sideStyle.borderColor,
       letterSpacing: sideStyle.letterSpacing,
       lineHeight: sideStyle.lineHeight,
+      showMeta: sideStyle.showMeta ?? false,
+      speaker: sideStyle.speaker || '',
+      dateText: sideStyle.dateText || '',
+      metaTheme: sideStyle.metaTheme || 'inside',
+      metaFontFamily: sideStyle.metaFontFamily || DEFAULT_META_FONT_FAMILY,
+      metaColor:
+        sideStyle.metaColor || (nextAlign === 'right' ? '#cdaf77' : '#777674'),
       customStyleKeys: [],
     };
 
@@ -528,6 +538,7 @@ export default function App() {
         hasBottomShadow: false,
         bottomShadowColor: '#b9a98e',
         hasTail: true,
+        metaColor: '#777674',
       };
       rightPatch = {
         bgColor: '#FBF5E6',
@@ -537,6 +548,7 @@ export default function App() {
         hasBottomShadow: false,
         bottomShadowColor: '#b9a98e',
         hasTail: true,
+        metaColor: '#cdaf77',
       };
       centerPatch = {
         color: '#34312F',
@@ -545,6 +557,7 @@ export default function App() {
         hasShadow: false,
         hasBottomShadow: false,
         hasTail: false,
+        metaColor: '#777674',
       };
       canvasBgColor = '#faf9f8';
       canvasPaperTexture = 'paper';
@@ -558,6 +571,7 @@ export default function App() {
         hasBottomShadow: true,
         bottomShadowColor: '#b9a98e',
         hasTail: false,
+        metaColor: '#665c52',
       };
       rightPatch = {
         bgColor: '#faf9f8',
@@ -567,6 +581,7 @@ export default function App() {
         hasBottomShadow: true,
         bottomShadowColor: '#b9a98e',
         hasTail: false,
+        metaColor: '#665c52',
       };
       centerPatch = {
         color: '#34312F',
@@ -575,6 +590,7 @@ export default function App() {
         hasShadow: false,
         hasBottomShadow: false,
         hasTail: false,
+        metaColor: '#665c52',
       };
       canvasBgColor = '#faf9f8';
       canvasPaperTexture = 'none';
@@ -586,6 +602,7 @@ export default function App() {
         hasShadow: false,
         hasBottomShadow: false,
         hasTail: false,
+        metaColor: '#51382a',
       };
       rightPatch = {
         bgColor: '#ddc9a1',
@@ -593,6 +610,7 @@ export default function App() {
         hasShadow: false,
         hasBottomShadow: false,
         hasTail: false,
+        metaColor: '#51382a',
       };
       centerPatch = {
         color: '#FFFFFF',
@@ -601,6 +619,7 @@ export default function App() {
         hasShadow: false,
         hasBottomShadow: false,
         hasTail: false,
+        metaColor: '#51382a',
       };
       canvasBgColor = '#1b150c';
       canvasPaperTexture = 'none';
@@ -614,6 +633,7 @@ export default function App() {
       'hasBottomShadow',
       'bottomShadowColor',
       'hasTail',
+      'metaColor',
     ];
 
     setDefaultSideStyles((prev) => ({
@@ -775,13 +795,195 @@ export default function App() {
     });
   };
 
+  // Export single side style preset (.json file)
+  const handleExportSidePreset = (
+    side: 'left' | 'center' | 'right',
+    styleOverride?: BubbleSideStyle
+  ) => {
+    try {
+      const styleToExport = styleOverride || defaultSideStyles[side];
+      const usedCustomFonts = fonts.filter(
+        (f) =>
+          f.isCustom &&
+          (f.family.toLowerCase() === styleToExport.fontFamily?.toLowerCase() ||
+            f.family.toLowerCase() ===
+              styleToExport.metaFontFamily?.toLowerCase())
+      );
+      const presetData = {
+        version: 1,
+        type: 'manhwa-bubble-side-preset',
+        side,
+        exportedAt: new Date().toISOString(),
+        style: styleToExport,
+        customFonts: usedCustomFonts,
+      };
+      const blob = new Blob([JSON.stringify(presetData, null, 2)], {
+        type: 'application/json;charset=utf-8',
+      });
+      const url = URL.createObjectURL(blob);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const sideKor =
+        side === 'left' ? '왼쪽' : side === 'center' ? '중앙' : '오른쪽';
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `이체통-${sideKor}서식-${dateStr}.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.error('Failed to export side style preset', err);
+    }
+  };
+
+  // Export all styles + background preset (.json file)
+  const handleExportAllPreset = (
+    sidesOverride?: DefaultSideStyles,
+    canvasOverride?: CanvasConfig
+  ) => {
+    try {
+      const presetData = {
+        version: 1,
+        type: 'manhwa-card-style-preset',
+        exportedAt: new Date().toISOString(),
+        defaultSideStyles: sidesOverride || defaultSideStyles,
+        canvasConfig: canvasOverride || canvasConfig,
+        customFonts: fonts.filter((f) => f.isCustom),
+      };
+      const blob = new Blob([JSON.stringify(presetData, null, 2)], {
+        type: 'application/json;charset=utf-8',
+      });
+      const url = URL.createObjectURL(blob);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `이체통-일괄서식-${dateStr}.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.error('Failed to export style preset', err);
+    }
+  };
+
+  // Apply imported single side style
+  const handleApplySidePreset = (
+    side: 'left' | 'center' | 'right',
+    style: BubbleSideStyle,
+    customFonts?: WebFont[]
+  ) => {
+    recordHistory(false);
+
+    if (Array.isArray(customFonts) && customFonts.length > 0) {
+      for (const cf of customFonts) {
+        if (cf && cf.id && cf.name && cf.family) {
+          saveCustomFont({ ...cf, isCustom: true });
+        }
+      }
+      const loadedCustom = getStoredCustomFonts();
+      setFonts([...PRESET_FONTS, ...loadedCustom]);
+    }
+
+    const mergedSideStyle: BubbleSideStyle = {
+      ...INITIAL_SIDE_STYLES[side],
+      ...style,
+    };
+
+    setDefaultSideStyles((prev) => ({
+      ...prev,
+      [side]: mergedSideStyle,
+    }));
+    setSavedSideStyles((prev) => ({
+      ...prev,
+      [side]: mergedSideStyle,
+    }));
+
+    setBubbles((prevBubbles) =>
+      prevBubbles.map((b) => {
+        if (b.align !== side) return b;
+        const keepSpeaker = b.speaker?.trim()
+          ? b.speaker
+          : mergedSideStyle.speaker || '';
+        const keepDate = b.dateText?.trim()
+          ? b.dateText
+          : mergedSideStyle.dateText || '';
+        const preservedCustomKeys: (keyof BubbleSideStyle)[] = [];
+        if (b.speaker?.trim()) preservedCustomKeys.push('speaker');
+        if (b.dateText?.trim()) preservedCustomKeys.push('dateText');
+
+        return {
+          ...b,
+          ...mergedSideStyle,
+          speaker: keepSpeaker,
+          dateText: keepDate,
+          customStyleKeys: preservedCustomKeys,
+        };
+      })
+    );
+  };
+
+  // Apply full preset (all 3 sides + optional background config)
+  const handleApplyFullPreset = (
+    sides: DefaultSideStyles,
+    nextCanvasConfig?: Partial<CanvasConfig>,
+    customFonts?: WebFont[]
+  ) => {
+    recordHistory(false);
+
+    if (Array.isArray(customFonts) && customFonts.length > 0) {
+      for (const cf of customFonts) {
+        if (cf && cf.id && cf.name && cf.family) {
+          saveCustomFont({ ...cf, isCustom: true });
+        }
+      }
+      const loadedCustom = getStoredCustomFonts();
+      setFonts([...PRESET_FONTS, ...loadedCustom]);
+    }
+
+    const nextSideStyles: DefaultSideStyles = {
+      left: { ...INITIAL_SIDE_STYLES.left, ...(sides.left || {}) },
+      center: { ...INITIAL_SIDE_STYLES.center, ...(sides.center || {}) },
+      right: { ...INITIAL_SIDE_STYLES.right, ...(sides.right || {}) },
+    };
+
+    setDefaultSideStyles(nextSideStyles);
+    setSavedSideStyles(nextSideStyles);
+
+    setBubbles((prevBubbles) =>
+      prevBubbles.map((b) => {
+        const sideStyle = nextSideStyles[b.align] || nextSideStyles.left;
+        const keepSpeaker = b.speaker?.trim()
+          ? b.speaker
+          : sideStyle.speaker || '';
+        const keepDate = b.dateText?.trim()
+          ? b.dateText
+          : sideStyle.dateText || '';
+        const preservedCustomKeys: (keyof BubbleSideStyle)[] = [];
+        if (b.speaker?.trim()) preservedCustomKeys.push('speaker');
+        if (b.dateText?.trim()) preservedCustomKeys.push('dateText');
+
+        return {
+          ...b,
+          ...sideStyle,
+          speaker: keepSpeaker,
+          dateText: keepDate,
+          customStyleKeys: preservedCustomKeys,
+        };
+      })
+    );
+
+    if (nextCanvasConfig && typeof nextCanvasConfig === 'object') {
+      setCanvasConfig((prev) => ({
+        ...prev,
+        ...nextCanvasConfig,
+      }));
+    }
+  };
+
   return (
     <div id="app-root" className="flex h-screen w-screen flex-col overflow-hidden bg-stone-100 font-sans">
       {/* Top Main Navigation Toolbar */}
       <HeaderToolbar
-        onAddBubble={handleAddBubble}
         onOpenImportModal={() => setIsImportModalOpen(true)}
         onOpenFontManager={() => setIsFontModalOpen(true)}
+        onOpenStylePresetModal={() => setIsStylePresetModalOpen(true)}
         onResetToSample={handleResetToSample}
         onUndo={handleUndo}
         canUndo={historyStack.length > 0}
@@ -794,79 +996,94 @@ export default function App() {
 
       {/* Main Workspace Area: Canvas Stage (Left/Center) + Inspector (Right) */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Canvas Scrollable Stage */}
-        <main
-          id="canvas-stage"
-          className="relative flex flex-1 min-w-0 flex-col items-center justify-start overflow-y-auto overflow-x-auto p-3 pb-44 sm:p-8 md:pb-12 lg:p-12"
-          onMouseDownCapture={(e) => {
-            const target = e.target as HTMLElement;
-            stagePointerDownInsideBubbleRef.current = Boolean(
-              target.closest('[id^="bubble-container-"]') ||
-                target.closest('#floating-text-toolbar')
-            );
-          }}
-          onClick={() => {
-            if (stagePointerDownInsideBubbleRef.current) {
-              stagePointerDownInsideBubbleRef.current = false;
-              return;
-            }
-            const sel = window.getSelection();
-            if (sel && !sel.isCollapsed && sel.toString().length > 0) {
-              return;
-            }
-            handleSelectBubble(null);
-          }}
-        >
-          {/* Title Bar above Canvas */}
-          <div className="mb-3 md:mb-4 flex items-center justify-between gap-2 w-full max-w-[800px] text-xs text-stone-500">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="truncate text-stone-700 font-semibold">
-                이체통 출력소
-              </span>
-              <span className="truncate text-stone-500">
-                이세계 우체통 특화 카드 메이커
+        {/* Canvas Stage Wrapper with Floating + Button at bottom-right */}
+        <div className="relative flex flex-1 min-w-0 overflow-hidden">
+          {/* Canvas Scrollable Stage */}
+          <main
+            id="canvas-stage"
+            className="relative flex flex-1 min-w-0 flex-col items-center justify-start overflow-y-auto overflow-x-auto p-3 pb-44 sm:p-8 md:pb-12 lg:p-12"
+            onMouseDownCapture={(e) => {
+              const target = e.target as HTMLElement;
+              stagePointerDownInsideBubbleRef.current = Boolean(
+                target.closest('[id^="bubble-container-"]') ||
+                  target.closest('#floating-text-toolbar')
+              );
+            }}
+            onClick={() => {
+              if (stagePointerDownInsideBubbleRef.current) {
+                stagePointerDownInsideBubbleRef.current = false;
+                return;
+              }
+              const sel = window.getSelection();
+              if (sel && !sel.isCollapsed && sel.toString().length > 0) {
+                return;
+              }
+              handleSelectBubble(null);
+            }}
+          >
+            {/* Title Bar above Canvas */}
+            <div className="mb-3 md:mb-4 flex items-center justify-between gap-2 w-full max-w-[800px] text-xs text-stone-500">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="truncate text-stone-700 font-semibold">
+                  이체통 출력소
+                </span>
+                <span className="truncate text-stone-500">
+                  이세계 우체통 특화 카드 메이커
+                </span>
+              </div>
+            </div>
+
+            {/* Actual Card Rendered Container */}
+            <div
+              id="canvas-scaler"
+              style={{
+                transform: `scale(${effectiveZoom})`,
+                transformOrigin: 'top center',
+              }}
+              className="transition-transform duration-100"
+            >
+              <CanvasCard
+                ref={canvasRef}
+                config={canvasConfig}
+                bubbles={bubbles}
+                selectedBubbleId={selectedBubbleId}
+                onSelectBubble={handleSelectBubble}
+                onUpdateBubble={(id, updated) => handleUpdateBubble(id, updated)}
+                onDeleteBubble={handleDeleteBubble}
+                onDuplicateBubble={handleDuplicateBubble}
+                onMoveOrCopyBubble={handleMoveOrCopyBubble}
+                fonts={fonts}
+                isExporting={isExporting}
+              />
+            </div>
+
+            {/* Footer Guide Tips */}
+            <div className="hidden md:flex mt-8 items-center gap-2 rounded-xl border border-stone-200 bg-white/70 px-4 py-2.5 text-xs text-stone-500 shadow-2xs backdrop-blur-xs">
+              <Info className="h-4 w-4 shrink-0 text-amber-700" />
+              <span className="leading-relaxed">
+                말풍선을 <strong>길게 누르고 드래그</strong>하면 위치를 이동하고, <strong>Alt를 누른 채 드래그</strong>하면 말풍선을 복사할 수 있습니다.
+                <br />
+                텍스트 드래그 시 <strong>선택한 글자만</strong> 서식/색상이 적용됩니다.
               </span>
             </div>
-          </div>
 
-          {/* Actual Card Rendered Container */}
-          <div
-            id="canvas-scaler"
-            style={{
-              transform: `scale(${effectiveZoom})`,
-              transformOrigin: 'top center',
-            }}
-            className="transition-transform duration-100"
+            <p className="mt-4 text-center text-[8pt] text-stone-400">
+              해당 사이트는 바이브 코딩으로 제작되었습니다.
+            </p>
+          </main>
+
+          {/* Twitter-style Floating Circular (+) Button at bottom-right of Canvas */}
+          <button
+            type="button"
+            id="btn-add-bubble-fab"
+            onClick={() => handleAddBubble()}
+            title="말풍선 추가"
+            aria-label="말풍선 추가"
+            className="fixed md:absolute bottom-20 right-5 md:bottom-7 md:right-7 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-stone-900 text-white shadow-lg ring-1 ring-white/15 hover:bg-stone-800 hover:scale-105 active:scale-95 transition-all cursor-pointer"
           >
-            <CanvasCard
-              ref={canvasRef}
-              config={canvasConfig}
-              bubbles={bubbles}
-              selectedBubbleId={selectedBubbleId}
-              onSelectBubble={handleSelectBubble}
-              onUpdateBubble={(id, updated) => handleUpdateBubble(id, updated)}
-              onDeleteBubble={handleDeleteBubble}
-              onDuplicateBubble={handleDuplicateBubble}
-              onMoveOrCopyBubble={handleMoveOrCopyBubble}
-              fonts={fonts}
-              isExporting={isExporting}
-            />
-          </div>
-
-          {/* Footer Guide Tips */}
-          <div className="hidden md:flex mt-8 items-center gap-2 rounded-xl border border-stone-200 bg-white/70 px-4 py-2.5 text-xs text-stone-500 shadow-2xs backdrop-blur-xs">
-            <Info className="h-4 w-4 shrink-0 text-amber-700" />
-            <span className="leading-relaxed">
-              말풍선을 <strong>길게 누르고 드래그</strong>하면 위치를 이동하고, <strong>Alt를 누른 채 드래그</strong>하면 말풍선을 복사할 수 있습니다.
-              <br />
-              텍스트 드래그 시 <strong>선택한 글자만</strong> 서식/색상이 적용됩니다.
-            </span>
-          </div>
-
-          <p className="mt-4 text-center text-[8pt] text-stone-400">
-            해당 사이트는 바이브 코딩으로 제작되었습니다.
-          </p>
-        </main>
+            <Plus className="h-6 w-6 stroke-[2.5]" />
+          </button>
+        </div>
 
         {/* Right Inspector Panel (Desktop >= md) */}
         <InspectorPanel
@@ -933,6 +1150,19 @@ export default function App() {
           onApplyTheme={handleApplyTheme}
         />
       </div>
+
+      {/* Integrated Style Preset Export/Import Modal */}
+      <StylePresetModal
+        isOpen={isStylePresetModalOpen}
+        onClose={() => setIsStylePresetModalOpen(false)}
+        defaultSideStyles={defaultSideStyles}
+        canvasConfig={canvasConfig}
+        fonts={fonts}
+        onExportSidePreset={handleExportSidePreset}
+        onExportAllPreset={handleExportAllPreset}
+        onApplySideStyle={handleApplySidePreset}
+        onApplyFullPreset={handleApplyFullPreset}
+      />
 
       {/* External Font Manager Modal */}
       <FontManagerModal

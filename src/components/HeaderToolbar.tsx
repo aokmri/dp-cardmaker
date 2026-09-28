@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   Download,
-  Plus,
   FileText,
   Sparkles,
   Copy,
@@ -9,13 +8,14 @@ import {
   Undo2,
   Check,
   Loader2,
+  Layers,
 } from 'lucide-react';
 import { CanvasConfig } from '../types';
 
 interface HeaderToolbarProps {
-  onAddBubble: () => void;
   onOpenImportModal: () => void;
   onOpenFontManager: () => void;
+  onOpenStylePresetModal: () => void;
   onResetToSample: () => void;
   onUndo?: () => void;
   canUndo?: boolean;
@@ -27,13 +27,12 @@ interface HeaderToolbarProps {
 }
 
 export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
-  onAddBubble,
   onOpenImportModal,
   onOpenFontManager,
+  onOpenStylePresetModal,
   onResetToSample,
   onUndo,
   canUndo = false,
-  canvasConfig,
   onExportPng,
   onCopyClipboard,
   isExporting,
@@ -44,32 +43,8 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
       id="app-header-toolbar"
       className="sticky top-0 z-40 flex h-16 w-full items-center justify-between gap-2 border-b border-stone-200 bg-white/95 px-3 sm:px-6 shadow-xs backdrop-blur-md"
     >
-      {/* Left: Tools and Actions (말풍선 추가, 쪽지 일괄 변환, 외부 글꼴 불러오기, 뒤로가기, 초기화) */}
+      {/* Left: Tools and Actions (폰트목록&추가 / 쪽지일괄변환 / 서식 / 뒤로가기 / 초기화) */}
       <div className="flex items-center gap-1.5 shrink-0">
-        <button
-          type="button"
-          id="btn-add-bubble"
-          onClick={onAddBubble}
-          title="말풍선 추가"
-          aria-label="말풍선 추가"
-          className="flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 rounded-lg border border-stone-200 bg-white p-2 lg:px-3 lg:py-1.5 text-xs font-medium text-stone-700 shadow-2xs hover:bg-stone-50 hover:text-stone-900 transition cursor-pointer"
-        >
-          <Plus className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0 text-amber-700" />
-          <span className="hidden sm:inline">말풍선 추가</span>
-        </button>
-
-        <button
-          type="button"
-          id="btn-open-text-import"
-          onClick={onOpenImportModal}
-          title="쪽지 일괄 변환"
-          aria-label="쪽지 일괄 변환"
-          className="flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 rounded-lg border border-stone-200 bg-white p-2 lg:px-3 lg:py-1.5 text-xs font-medium text-stone-700 shadow-2xs hover:bg-stone-50 hover:text-stone-900 transition cursor-pointer"
-        >
-          <FileText className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0 text-stone-500" />
-          <span className="hidden sm:inline">쪽지 일괄 변환</span>
-        </button>
-
         <button
           type="button"
           id="btn-open-font-manager"
@@ -80,6 +55,30 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
         >
           <Sparkles className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0 text-amber-700" />
           <span className="hidden sm:inline">폰트목록&amp;추가</span>
+        </button>
+
+        <button
+          type="button"
+          id="btn-open-text-import"
+          onClick={onOpenImportModal}
+          title="쪽지일괄변환"
+          aria-label="쪽지일괄변환"
+          className="flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 rounded-lg border border-stone-200 bg-white p-2 lg:px-3 lg:py-1.5 text-xs font-medium text-stone-700 shadow-2xs hover:bg-stone-50 hover:text-stone-900 transition cursor-pointer"
+        >
+          <FileText className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0 text-stone-500" />
+          <span className="hidden sm:inline">쪽지일괄변환</span>
+        </button>
+
+        <button
+          type="button"
+          id="btn-open-style-preset"
+          onClick={onOpenStylePresetModal}
+          title="서식 내보내기/불러오기"
+          aria-label="서식"
+          className="flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 rounded-lg border border-stone-200 bg-white p-2 lg:px-3 lg:py-1.5 text-xs font-medium text-stone-700 shadow-2xs hover:bg-stone-50 hover:text-stone-900 transition cursor-pointer"
+        >
+          <Layers className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0 text-stone-500" />
+          <span className="hidden sm:inline">서식</span>
         </button>
 
         {onUndo && (

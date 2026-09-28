@@ -2,12 +2,18 @@ export type BubbleAlignment = 'left' | 'right' | 'center';
 export type TextAlignment = 'left' | 'center' | 'right';
 export type CanvasAspectRatio = 'auto' | 'square' | 'story' | 'wide';
 export type CardThemeId = 'legacy' | 'default-white' | 'default-dark';
+export type BubbleMetaTheme = 'outside' | 'inside';
 
 export interface Bubble {
   id: string;
   text: string;
   html?: string; // rich-text formatted HTML for partial formatting
+  showMeta?: boolean;
   speaker?: string;
+  dateText?: string;
+  metaTheme?: BubbleMetaTheme;
+  metaFontFamily?: string;
+  metaColor?: string;
   speakerColor?: string;
   showSpeaker?: boolean;
   align: BubbleAlignment;
@@ -62,6 +68,12 @@ export const SIDE_STYLE_KEYS: (keyof BubbleSideStyle)[] = [
   'borderColor',
   'letterSpacing',
   'lineHeight',
+  'showMeta',
+  'speaker',
+  'dateText',
+  'metaTheme',
+  'metaFontFamily',
+  'metaColor',
 ];
 
 export interface BubbleSideStyle {
@@ -85,6 +97,12 @@ export interface BubbleSideStyle {
   borderColor?: string;
   letterSpacing?: number;
   lineHeight?: number;
+  showMeta?: boolean;
+  speaker?: string;
+  dateText?: string;
+  metaTheme?: BubbleMetaTheme;
+  metaFontFamily?: string;
+  metaColor?: string;
 }
 
 export interface DefaultSideStyles {

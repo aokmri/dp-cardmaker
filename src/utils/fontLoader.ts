@@ -38,14 +38,15 @@ function injectFontElement(fontId: string, cssOrUrl: string): void {
 
   // @import url(...) only -> convert to <link crossorigin="anonymous"> when possible
   const importOnlyMatch = trimmed.match(
-    /^@import\s+(?:url\()?['"]?(https?:\/\/[^'")\s]+)['"]?\)?\s*;?$/i
+    /^@import\s+(?:url\()?['"]?((?:https?:)?\/\/[^'")\s]+)['"]?\)?\s*;?$/i
   );
   if (importOnlyMatch && importOnlyMatch[1]) {
+    const rawHref = importOnlyMatch[1];
     const link = document.createElement('link');
     link.id = `font-style-${fontId}`;
     link.rel = 'stylesheet';
     link.crossOrigin = 'anonymous';
-    link.href = importOnlyMatch[1];
+    link.href = rawHref.startsWith('//') ? `https:${rawHref}` : rawHref;
     document.head.appendChild(link);
     return;
   }

@@ -298,7 +298,7 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
                         className="mt-0.5 truncate text-[11px] text-stone-600"
                         style={{ fontFamily: matched.family }}
                       >
-                        {previewPhrase}
+                        {inputValue.trim() || '이세계에서 도착한 편지입니다.'}
                       </p>
                       {item.rawName.toLowerCase() !==
                         matched.name.toLowerCase() && (

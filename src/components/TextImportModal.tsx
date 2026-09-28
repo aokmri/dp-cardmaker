@@ -14,6 +14,7 @@ interface TextImportModalProps {
 interface ParsedNoteItem {
   text: string;
   nickname: string;
+  dateText?: string;
 }
 
 /**
@@ -115,10 +116,13 @@ function parseMailboxNotes(rawInput: string): {
         }
 
         const dialogueText = dialogueSlice.join('\n').trim();
+        const parsedDate =
+          dateIdx < rawLines.length ? rawLines[dateIdx].trim() : '';
         if (dialogueText.length > 0) {
           items.push({
             text: dialogueText,
             nickname,
+            dateText: parsedDate,
           });
           if (nickname) {
             nicknameSet.add(nickname);
@@ -263,7 +267,14 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
       const bubble: Bubble = {
         id: `bubble-${Date.now()}-${index}`,
         text: item.text,
-        speaker: '',
+        showMeta: sideStyle.showMeta ?? false,
+        speaker: item.nickname || sideStyle.speaker || '',
+        dateText: item.dateText || sideStyle.dateText || '',
+        metaTheme: sideStyle.metaTheme || 'inside',
+        metaFontFamily:
+          sideStyle.metaFontFamily || "'KimJeongCheolHandwriting', sans-serif",
+        metaColor:
+          sideStyle.metaColor || (align === 'right' ? '#cdaf77' : '#777674'),
         align,
         x: align === 'left' ? 8 : 45,
         y: startY + index * spacing,
@@ -288,7 +299,10 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
         borderColor: sideStyle.borderColor,
         letterSpacing: sideStyle.letterSpacing,
         lineHeight: sideStyle.lineHeight,
-        customStyleKeys: [],
+        customStyleKeys: [
+          ...(item.nickname ? (['speaker'] as const) : []),
+          ...(item.dateText ? (['dateText'] as const) : []),
+        ],
       };
 
       return bubble;

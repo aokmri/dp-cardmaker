@@ -33,7 +33,11 @@ import {
   DefaultSideStyles,
   WebFont,
 } from '../types';
-import { COLOR_PALETTE } from '../data/presetFonts';
+import {
+  COLOR_PALETTE,
+  DEFAULT_META_FONT_FAMILY,
+  getMetaOrderedFonts,
+} from '../data/presetFonts';
 import { FontSelectDropdown } from './FontSelectDropdown';
 import { FontPasteMatcher } from './FontPasteMatcher';
 import {
@@ -471,7 +475,8 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                   />
                   <FontPasteMatcher
                     fonts={fonts}
-                    onSelectFont={handleFontFamily}
+                    currentFamily={activeStyle.fontFamily}
+                    onApplyFont={(family) => handleFontFamily(family)}
                     onOpenFontManager={onOpenFontManager}
                   />
                 </div>
@@ -600,22 +605,178 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                         placeholder="대사 텍스트를 입력하세요"
                       />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <label className="text-[11px] font-semibold text-stone-600 shrink-0">
-                        화자 이름 (선택)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder=""
-                        value={selectedBubble.speaker || ''}
-                        onChange={(e) =>
-                          onUpdateBubble({ speaker: e.target.value })
-                        }
-                        className="flex-1 rounded-lg border border-stone-200 px-2.5 py-1 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"
-                      />
-                    </div>
                   </div>
                 )}
+
+                {/* Speaker Name & Date Section (works for both Single and Batch mode) */}
+                <div className="space-y-2.5 rounded-xl border border-stone-200 bg-stone-50/70 p-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-stone-700">
+                      이름/시간 표시
+                    </label>
+                    <div className="flex rounded-lg border border-stone-200 bg-white p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => handleStyleChange({ showMeta: true })}
+                        className={`rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                          Boolean(
+                            activeStyle.showMeta ??
+                              Boolean(activeStyle.speaker || activeStyle.dateText)
+                          )
+                            ? 'bg-stone-900 text-white'
+                            : 'text-stone-600'
+                        }`}
+                      >
+                        ON
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleStyleChange({ showMeta: false })}
+                        className={`rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                          !Boolean(
+                            activeStyle.showMeta ??
+                              Boolean(activeStyle.speaker || activeStyle.dateText)
+                          )
+                            ? 'bg-stone-900 text-white'
+                            : 'text-stone-600'
+                        }`}
+                      >
+                        OFF
+                      </button>
+                    </div>
+                  </div>
+
+                  {Boolean(
+                    activeStyle.showMeta ??
+                      Boolean(activeStyle.speaker || activeStyle.dateText)
+                  ) && (
+                    <div className="space-y-2.5 pt-1.5 border-t border-stone-200/80">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleStyleChange({
+                              showMeta: true,
+                              metaTheme: 'outside',
+                            })
+                          }
+                          className={`rounded-lg border px-2 py-1.5 text-center text-xs font-semibold ${
+                            (activeStyle.metaTheme || 'inside') === 'outside'
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-200 bg-white text-stone-700'
+                          }`}
+                        >
+                          메신저
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleStyleChange({
+                              showMeta: true,
+                              metaTheme: 'inside',
+                            })
+                          }
+                          className={`rounded-lg border px-2 py-1.5 text-center text-xs font-semibold ${
+                            (activeStyle.metaTheme || 'inside') === 'inside'
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-200 bg-white text-stone-700'
+                          }`}
+                        >
+                          이체통
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div>
+                          <label className="block text-[10px] font-medium text-stone-600 mb-0.5">
+                            이름
+                          </label>
+                          <input
+                            type="text"
+                            value={activeStyle.speaker || ''}
+                            onChange={(e) =>
+                              handleStyleChange({
+                                showMeta: true,
+                                speaker: e.target.value,
+                              })
+                            }
+                            className="w-full rounded-lg border border-stone-200 bg-white px-2 py-1 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-medium text-stone-600 mb-0.5">
+                            시간
+                          </label>
+                          <input
+                            type="text"
+                            value={activeStyle.dateText || ''}
+                            onChange={(e) =>
+                              handleStyleChange({
+                                showMeta: true,
+                                dateText: e.target.value,
+                              })
+                            }
+                            className="w-full rounded-lg border border-stone-200 bg-white px-2 py-1 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-medium text-stone-600">
+                          폰트
+                        </label>
+                        <FontSelectDropdown
+                          fonts={getMetaOrderedFonts(fonts)}
+                          value={
+                            activeStyle.metaFontFamily ||
+                            DEFAULT_META_FONT_FAMILY
+                          }
+                          onChange={(metaFontFamily) =>
+                            handleStyleChange({ metaFontFamily })
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-medium text-stone-600">
+                          색상
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={activeStyle.metaColor || '#777674'}
+                            onChange={(e) =>
+                              handleStyleChange({ metaColor: e.target.value })
+                            }
+                            className="h-7 w-7 shrink-0 cursor-pointer rounded border border-stone-200 bg-white p-0.5"
+                            title="색상"
+                          />
+                          <div className="flex flex-1 flex-wrap gap-1">
+                            {COLOR_PALETTE.metaText.map((c) => (
+                              <button
+                                key={c.value}
+                                type="button"
+                                onClick={() =>
+                                  handleStyleChange({ metaColor: c.value })
+                                }
+                                style={{ backgroundColor: c.value }}
+                                title={c.label}
+                                className={`h-5 w-5 rounded-full border border-stone-300 transition-transform ${
+                                  (
+                                    activeStyle.metaColor || '#777674'
+                                  ).toLowerCase() === c.value.toLowerCase()
+                                    ? 'scale-110 ring-2 ring-stone-900'
+                                    : ''
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -1609,19 +1770,6 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
             );
           })}
         </div>
-
-        {/* Quick Add Bubble button on the right end of the bar */}
-        <button
-          type="button"
-          onClick={() => onAddBubble()}
-          title="말풍선 추가"
-          className="flex flex-col items-center justify-center gap-0.5 rounded-xl bg-amber-50 border border-amber-200/80 px-2.5 py-1.5 min-w-[48px] shrink-0 text-amber-900 active:bg-amber-100"
-        >
-          <Plus className="h-4 w-4 text-amber-700" />
-          <span className="text-[10px] font-semibold whitespace-nowrap leading-tight">
-            추가
-          </span>
-        </button>
       </div>
     </div>
   );

@@ -51,6 +51,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const bubbleBoxRef = useRef<HTMLDivElement>(null);
   const textEditableRef = useRef<HTMLDivElement>(null);
+  const insideMetaRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const isTextDraggingRef = useRef<boolean>(false);
@@ -172,12 +173,16 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
       currentNode = walker.nextNode();
     }
 
+    const metaEl = insideMetaRef.current;
+    const metaWidth = metaEl ? metaEl.offsetWidth : 0;
+
     if (minLeft < Infinity && maxRight > minLeft) {
       const tightTextWidth = (maxRight - minLeft) / scale;
-      if (tightTextWidth > 0 && tightTextWidth < elClientWidth - 1) {
+      const requiredInnerWidth = Math.max(tightTextWidth, metaWidth);
+      if (requiredInnerWidth > 0 && requiredInnerWidth < elClientWidth - 1) {
         const borderExtra = bubble.hasBorder ? 2 : 0;
         let targetBoxWidth =
-          Math.ceil(tightTextWidth + 1) + bubble.paddingX * 2 + borderExtra;
+          Math.ceil(requiredInnerWidth + 1) + bubble.paddingX * 2 + borderExtra;
         boxEl.style.width = `${targetBoxWidth}px`;
 
         // Ensure shrinking never triggers an unintended extra line break
@@ -215,6 +220,12 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     bubble.paddingY,
     bubble.hasBorder,
     bubble.align,
+    bubble.showMeta,
+    bubble.speaker,
+    bubble.dateText,
+    bubble.metaTheme,
+    bubble.metaFontFamily,
+    bubble.metaColor,
     canvasWidth,
     isExporting,
     fitBubbleToWrappedText,
@@ -508,41 +519,137 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
         />
       )}
 
-      {/* Speaker name label if present */}
-      {bubble.speaker && (
-        <div
-          className={`mb-1 text-xs font-semibold tracking-wide text-stone-600 ${
-            bubble.align === 'right' ? 'text-right' : 'text-left'
-          }`}
-          style={{ fontFamily: bubble.fontFamily }}
-        >
-          {bubble.speaker}
-        </div>
-      )}
+      {/* Theme 1 ('outside'): Speaker name above bubble */}
+      {Boolean(bubble.showMeta ?? Boolean(bubble.speaker || bubble.dateText)) &&
+        (bubble.metaTheme || 'inside') === 'outside' &&
+        Boolean(bubble.speaker?.trim()) && (
+          <div
+            className={`mb-1.5 text-xs font-semibold tracking-wide leading-snug ${
+              bubble.align === 'right'
+                ? 'text-right'
+                : bubble.align === 'center'
+                ? 'text-center'
+                : 'text-left'
+            }`}
+            style={{
+              fontFamily:
+                bubble.metaFontFamily || "'KimJeongCheolHandwriting', sans-serif",
+              color:
+                bubble.metaColor ||
+                (bubble.align === 'right' ? '#cdaf77' : '#777674'),
+            }}
+          >
+            {bubble.speaker?.trim()}
+          </div>
+        )}
 
-      {/* Speech bubble card */}
+      {/* Bubble + Outside Date Row (KakaoTalk layout when metaTheme === 'outside') */}
       <div
-        ref={bubbleBoxRef}
-        id={`bubble-box-${bubble.id}`}
-        style={bubbleContainerStyle}
-        className={`relative transition-shadow duration-150 ${
-          isSelected && !isExporting
-            ? 'ring-2 ring-amber-500/70 ring-offset-2 ring-offset-transparent'
-            : 'hover:ring-1 hover:ring-stone-300'
+        className={`flex items-end gap-1.5 max-w-full ${
+          bubble.align === 'right'
+            ? 'justify-end'
+            : bubble.align === 'center'
+            ? 'justify-center'
+            : 'justify-start'
         }`}
       >
+        {Boolean(bubble.showMeta ?? Boolean(bubble.speaker || bubble.dateText)) &&
+          (bubble.metaTheme || 'inside') === 'outside' &&
+          Boolean(bubble.dateText?.trim()) &&
+          bubble.align === 'right' && (
+            <span
+              className="shrink-0 whitespace-nowrap text-[11px] leading-none pb-0.5 select-none"
+              style={{
+                fontFamily:
+                  bubble.metaFontFamily ||
+                  "'KimJeongCheolHandwriting', sans-serif",
+                color: bubble.metaColor || '#cdaf77',
+              }}
+            >
+              {bubble.dateText?.trim()}
+            </span>
+          )}
+
+        {/* Speech bubble card */}
         <div
-          ref={textEditableRef}
-          id={`bubble-text-${bubble.id}`}
-          contentEditable={!isExporting}
-          suppressContentEditableWarning={true}
-          onInput={handleInput}
-          onPaste={handlePaste}
-          onBlur={handleBlur}
-          onMouseUp={checkSelection}
-          onKeyUp={checkSelection}
-          style={textStyle}
-        />
+          ref={bubbleBoxRef}
+          id={`bubble-box-${bubble.id}`}
+          style={bubbleContainerStyle}
+          className={`relative transition-shadow duration-150 ${
+            isSelected && !isExporting
+              ? 'ring-2 ring-amber-500/70 ring-offset-2 ring-offset-transparent'
+              : 'hover:ring-1 hover:ring-stone-300'
+          }`}
+        >
+          <div
+            ref={textEditableRef}
+            id={`bubble-text-${bubble.id}`}
+            contentEditable={!isExporting}
+            suppressContentEditableWarning={true}
+            onInput={handleInput}
+            onPaste={handlePaste}
+            onBlur={handleBlur}
+            onMouseUp={checkSelection}
+            onKeyUp={checkSelection}
+            style={textStyle}
+          />
+
+          {/* Theme 2 ('inside'): Bottom divider line + Name • Date inside the bubble */}
+          {Boolean(bubble.showMeta ?? Boolean(bubble.speaker || bubble.dateText)) &&
+            (bubble.metaTheme || 'inside') === 'inside' &&
+            Boolean(bubble.speaker?.trim() || bubble.dateText?.trim()) && (
+              <div
+                className="mt-1.5 pt-1 border-t select-none"
+                style={{
+                  borderColor:
+                    bubble.hasBorder && bubble.borderColor
+                      ? bubble.borderColor
+                      : 'rgba(120, 113, 108, 0.22)',
+                  textAlign: bubble.textAlign,
+                }}
+              >
+                <div
+                  ref={insideMetaRef}
+                  className="inline-flex items-center whitespace-nowrap text-xs leading-snug"
+                  style={{
+                    fontFamily:
+                      bubble.metaFontFamily ||
+                      "'KimJeongCheolHandwriting', sans-serif",
+                    color:
+                      bubble.metaColor ||
+                      (bubble.align === 'right' ? '#cdaf77' : '#777674'),
+                  }}
+                >
+                  {bubble.speaker?.trim() && (
+                    <span className="font-semibold">{bubble.speaker.trim()}</span>
+                  )}
+                  {bubble.speaker?.trim() && bubble.dateText?.trim() && (
+                    <span className="mx-1.5 opacity-65">•</span>
+                  )}
+                  {bubble.dateText?.trim() && (
+                    <span>{bubble.dateText.trim()}</span>
+                  )}
+                </div>
+              </div>
+            )}
+        </div>
+
+        {Boolean(bubble.showMeta ?? Boolean(bubble.speaker || bubble.dateText)) &&
+          (bubble.metaTheme || 'inside') === 'outside' &&
+          Boolean(bubble.dateText?.trim()) &&
+          bubble.align !== 'right' && (
+            <span
+              className="shrink-0 whitespace-nowrap text-[11px] leading-none pb-0.5 select-none"
+              style={{
+                fontFamily:
+                  bubble.metaFontFamily ||
+                  "'KimJeongCheolHandwriting', sans-serif",
+                color: bubble.metaColor || '#777674',
+              }}
+            >
+              {bubble.dateText?.trim()}
+            </span>
+          )}
       </div>
     </div>
   );
