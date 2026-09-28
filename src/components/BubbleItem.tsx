@@ -605,7 +605,8 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
                     bubble.hasBorder && bubble.borderColor
                       ? bubble.borderColor
                       : 'rgba(120, 113, 108, 0.22)',
-                  textAlign: bubble.textAlign,
+                  textAlign:
+                    bubble.align === 'right' ? 'right' : bubble.textAlign,
                 }}
               >
                 <div

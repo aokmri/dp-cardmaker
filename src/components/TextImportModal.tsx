@@ -23,6 +23,8 @@ interface ParsedNoteItem {
  * 닉네임A
  * •
  * 214세 9월 11일 (또는 2026. 09. 20. 오후 11:57)
+ * •
+ * 수정  <-- ('•' 뒤의 '수정'은 무시)
  */
 function parseMailboxNotes(rawInput: string): {
   items: ParsedNoteItem[];
@@ -32,53 +34,77 @@ function parseMailboxNotes(rawInput: string): {
   const normalized = rawInput.replace(/\r\n/g, '\n');
   const initialLines = normalized.split('\n');
 
+  const isBulletChar = (s: string) =>
+    s === '•' || s === '·' || s === 'ㆍ' || s === '∙' || s === '⋅';
+
   // Normalize inline bullet variations into canonical separate lines:
   // [닉네임] / • / [날짜·시간]
-  const rawLines: string[] = [];
+  // Also strip inline "• 수정" tokens
+  const tempLines: string[] = [];
   const inlineBothRegex =
-    /^(.+?)\s*[•·ㆍ∙⋅]\s*((?:\d+|n)세\s*(?:\d+|n)월\s*(?:\d+|n)일.*|\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?.*|\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}.*|\d+월\s*\d+일.*|\d+\s*(?:초|분|시간|일|주|달|개월|년)\s*전.*)$/i;
+    /^(.+?)\s*[•·ㆍ∙⋅]\s*((?:\d+|n)세\s*(?:\d+|n)월\s*(?:\d+|n)일.*|(?:\d+|n)년\s*(?:\d+|n)월\s*(?:\d+|n)일.*|\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?.*|\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}.*|\d+월\s*\d+일.*|\d+\s*(?:초|분|시간|일|주|달|개월|년)\s*전.*|방금\s*전.*|어제.*|오늘.*|(?:오전|오후)\s*\d{1,2}:\d{2}.*)$/i;
   const leadingBulletDateRegex =
-    /^[•·ㆍ∙⋅]\s+((?:\d+|n)세\s*(?:\d+|n)월\s*(?:\d+|n)일.*|\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?.*|\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}.*|\d+월\s*\d+일.*|\d+\s*(?:초|분|시간|일|주|달|개월|년)\s*전.*)$/i;
+    /^[•·ㆍ∙⋅]\s+((?:\d+|n)세\s*(?:\d+|n)월\s*(?:\d+|n)일.*|(?:\d+|n)년\s*(?:\d+|n)월\s*(?:\d+|n)일.*|\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?.*|\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}.*|\d+월\s*\d+일.*|\d+\s*(?:초|분|시간|일|주|달|개월|년)\s*전.*|방금\s*전.*|어제.*|오늘.*|(?:오전|오후)\s*\d{1,2}:\d{2}.*)$/i;
   const trailingBulletNickRegex = /^(.+?)\s+[•·ㆍ∙⋅]$/;
 
-  for (const line of initialLines) {
+  for (const rawLine of initialLines) {
+    // 1. If the entire line is just "• 수정", ignore it completely
+    if (/^\s*[•·ㆍ∙⋅]\s*수정\s*$/.test(rawLine)) {
+      continue;
+    }
+
+    // 2. If the line ends with "• 수정" (e.g., "n세 n월 n일 • 수정"), strip the trailing "• 수정"
+    const line = rawLine.replace(/\s*[•·ㆍ∙⋅]\s*수정\s*$/, '');
     const trimmed = line.trim();
+
     const bothMatch = trimmed.match(inlineBothRegex);
     if (bothMatch && bothMatch[1].trim() && bothMatch[2].trim()) {
-      rawLines.push(bothMatch[1].trim());
-      rawLines.push('•');
-      rawLines.push(bothMatch[2].trim());
+      tempLines.push(bothMatch[1].trim());
+      tempLines.push('•');
+      tempLines.push(bothMatch[2].trim());
       continue;
     }
 
     const leadingMatch = trimmed.match(leadingBulletDateRegex);
     if (leadingMatch && leadingMatch[1].trim()) {
-      rawLines.push('•');
-      rawLines.push(leadingMatch[1].trim());
+      tempLines.push('•');
+      tempLines.push(leadingMatch[1].trim());
       continue;
     }
 
     const trailingMatch = trimmed.match(trailingBulletNickRegex);
     if (trailingMatch && trailingMatch[1].trim()) {
-      rawLines.push(trailingMatch[1].trim());
-      rawLines.push('•');
+      tempLines.push(trailingMatch[1].trim());
+      tempLines.push('•');
       continue;
     }
 
-    rawLines.push(line);
+    tempLines.push(line);
   }
+
+  // Filter out multi-line "• \n 수정" pairs (where a bullet line is followed by "수정")
+  const ignoredIndices = new Set<number>();
+  for (let i = 0; i < tempLines.length; i++) {
+    if (ignoredIndices.has(i)) continue;
+    if (isBulletChar(tempLines[i].trim())) {
+      let nextIdx = i + 1;
+      while (nextIdx < tempLines.length && tempLines[nextIdx].trim() === '') {
+        nextIdx++;
+      }
+      if (nextIdx < tempLines.length && tempLines[nextIdx].trim() === '수정') {
+        ignoredIndices.add(i);
+        ignoredIndices.add(nextIdx);
+      }
+    }
+  }
+
+  const rawLines = tempLines.filter((_, idx) => !ignoredIndices.has(idx));
 
   // Identify indices of bullet separator lines ('•', '·', 'ㆍ', '∙', '⋅')
   const bulletLineIndices: number[] = [];
   for (let i = 0; i < rawLines.length; i++) {
     const trimmed = rawLines[i].trim();
-    if (
-      trimmed === '•' ||
-      trimmed === '·' ||
-      trimmed === 'ㆍ' ||
-      trimmed === '∙' ||
-      trimmed === '⋅'
-    ) {
+    if (isBulletChar(trimmed)) {
       bulletLineIndices.push(i);
     }
   }
@@ -299,10 +325,7 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
         borderColor: sideStyle.borderColor,
         letterSpacing: sideStyle.letterSpacing,
         lineHeight: sideStyle.lineHeight,
-        customStyleKeys: [
-          ...(item.nickname ? (['speaker'] as const) : []),
-          ...(item.dateText ? (['dateText'] as const) : []),
-        ],
+        customStyleKeys: [],
       };
 
       return bubble;

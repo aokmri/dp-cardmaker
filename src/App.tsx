@@ -246,14 +246,22 @@ export default function App() {
   // Helper: apply a side's default style to a bubble while preserving keys modified via Individual Edit (개별편집)
   const applySideStylePreservingCustom = (
     bubble: Bubble,
-    sideStyle: BubbleSideStyle
+    sideStyle: BubbleSideStyle,
+    explicitUpdatedKeys?: (keyof BubbleSideStyle)[]
   ): Bubble => {
     const customSet = new Set(bubble.customStyleKeys || []);
     const nonCustomUpdates: Partial<Bubble> = {};
     for (const key of SIDE_STYLE_KEYS) {
-      if (!customSet.has(key)) {
-        (nonCustomUpdates as Record<string, unknown>)[key] = sideStyle[key];
+      if (customSet.has(key)) continue;
+      // Keep each bubble's extracted speaker/dateText unless speaker/dateText was explicitly edited in batch settings (or bubble has none)
+      if (
+        (key === 'speaker' || key === 'dateText') &&
+        (!explicitUpdatedKeys || !explicitUpdatedKeys.includes(key)) &&
+        Boolean(bubble[key]?.trim())
+      ) {
+        continue;
       }
+      (nonCustomUpdates as Record<string, unknown>)[key] = sideStyle[key];
     }
     return {
       ...bubble,
@@ -268,6 +276,7 @@ export default function App() {
     updated: Partial<BubbleSideStyle>
   ) => {
     recordHistory(true);
+    const updatedKeys = Object.keys(updated) as (keyof BubbleSideStyle)[];
     setDefaultSideStyles((prev) => {
       const nextStyle = { ...prev[side], ...updated };
       const nextState = { ...prev, [side]: nextStyle };
@@ -276,7 +285,7 @@ export default function App() {
       setBubbles((currentBubbles) =>
         currentBubbles.map((b) => {
           if (b.align !== side) return b;
-          return applySideStylePreservingCustom(b, nextStyle);
+          return applySideStylePreservingCustom(b, nextStyle, updatedKeys);
         })
       );
 
@@ -460,6 +469,14 @@ export default function App() {
         ? {
             ...sourceBubble,
             ...targetSideStyle,
+            speaker:
+              targetSideStyle.speaker?.trim() ||
+              sourceBubble.speaker ||
+              '',
+            dateText:
+              sourceBubble.dateText?.trim() ||
+              targetSideStyle.dateText ||
+              '',
             align: targetAlign,
             html: undefined,
             customStyleKeys: [],
@@ -498,6 +515,28 @@ export default function App() {
   // Bulk import
   const handleImportBubbles = (newBubbles: Bubble[], mode: 'replace' | 'append') => {
     recordHistory(false);
+
+    // Populate defaultSideStyles with extracted nickname (이름) and date/time (시간) per side
+    setDefaultSideStyles((prev) => {
+      const next = {
+        left: { ...prev.left },
+        center: { ...prev.center },
+        right: { ...prev.right },
+      };
+      for (const side of ['left', 'center', 'right'] as const) {
+        const sideBubbles = newBubbles.filter((b) => b.align === side);
+        const firstWithSpeaker = sideBubbles.find((b) => b.speaker?.trim());
+        const firstWithDate = sideBubbles.find((b) => b.dateText?.trim());
+        if (firstWithSpeaker?.speaker) {
+          next[side].speaker = firstWithSpeaker.speaker.trim();
+        }
+        if (firstWithDate?.dateText) {
+          next[side].dateText = firstWithDate.dateText.trim();
+        }
+      }
+      return next;
+    });
+
     if (mode === 'replace') {
       setBubbles(newBubbles);
     } else {

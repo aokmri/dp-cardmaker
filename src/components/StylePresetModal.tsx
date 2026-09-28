@@ -546,7 +546,7 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
                       style.hasBorder && style.borderColor
                         ? style.borderColor
                         : 'rgba(120, 113, 108, 0.22)',
-                    textAlign: style.textAlign,
+                    textAlign: side === 'right' ? 'right' : style.textAlign,
                   }}
                 >
                   <div

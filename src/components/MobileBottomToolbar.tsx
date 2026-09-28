@@ -111,6 +111,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
   const [openTool, setOpenTool] = useState<MobileToolId>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<'single' | 'batch'>('single');
+  const [expandedSliderKey, setExpandedSliderKey] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -118,7 +119,103 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
   };
 
   const toggleTool = (tool: Exclude<MobileToolId, null>) => {
+    setExpandedSliderKey(null);
     setOpenTool((prev) => (prev === tool ? null : tool));
+  };
+
+  const renderCollapsibleSlider = ({
+    sliderKey,
+    label,
+    displayValue,
+    value,
+    min,
+    max,
+    step = 1,
+    onChange,
+  }: {
+    sliderKey: string;
+    label: string;
+    displayValue: string;
+    value: number;
+    min: number;
+    max: number;
+    step?: number;
+    onChange: (val: number) => void;
+  }) => {
+    const isExpanded = expandedSliderKey === sliderKey;
+    return (
+      <div
+        className={`rounded-xl border transition-all ${
+          isExpanded
+            ? 'border-stone-800 bg-stone-50 p-2.5 col-span-full'
+            : 'border-stone-200 bg-white hover:bg-stone-50'
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() =>
+            setExpandedSliderKey((prev) =>
+              prev === sliderKey ? null : sliderKey
+            )
+          }
+          className={`flex w-full items-center justify-between gap-2 text-left cursor-pointer ${
+            isExpanded ? 'mb-2' : 'px-2.5 py-2'
+          }`}
+        >
+          <span className="text-[11px] font-semibold text-stone-700 truncate">
+            {label}
+          </span>
+          <span className="inline-flex items-center gap-1 shrink-0">
+            <span className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-stone-800">
+              {displayValue}
+            </span>
+            {isExpanded ? (
+              <ChevronUp className="h-3.5 w-3.5 text-stone-500" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 text-stone-400" />
+            )}
+          </span>
+        </button>
+
+        {isExpanded && (
+          <div className="flex items-center gap-2 pt-1.5 border-t border-stone-200/80">
+            <button
+              type="button"
+              onClick={() =>
+                onChange(
+                  Number(Math.max(min, Number((value - step).toFixed(2))))
+                )
+              }
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-xs font-bold text-stone-700 active:bg-stone-100"
+              aria-label={`${label} 감소`}
+            >
+              -
+            </button>
+            <input
+              type="range"
+              min={min}
+              max={max}
+              step={step}
+              value={value}
+              onChange={(e) => onChange(Number(e.target.value))}
+              className="w-full accent-stone-900"
+            />
+            <button
+              type="button"
+              onClick={() =>
+                onChange(
+                  Number(Math.min(max, Number((value + step).toFixed(2))))
+                )
+              }
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-xs font-bold text-stone-700 active:bg-stone-100"
+              aria-label={`${label} 증가`}
+            >
+              +
+            </button>
+          </div>
+        )}
+      </div>
+    );
   };
 
   // Determine whether typography/color/spacing controls target the selected bubble or batch side style
@@ -483,22 +580,16 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
 
                 {/* Font Size + Style Toggles + Alignment */}
                 <div className="space-y-2 pt-1 border-t border-stone-100">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-stone-600 font-medium">글자 크기</span>
-                    <span className="font-mono font-semibold text-stone-800">
-                      {activeStyle.fontSize}px
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="12"
-                    max="44"
-                    value={activeStyle.fontSize}
-                    onChange={(e) =>
-                      handleStyleChange({ fontSize: Number(e.target.value) })
-                    }
-                    className="w-full accent-stone-900"
-                  />
+                  {renderCollapsibleSlider({
+                    sliderKey: 'typo-fontSize',
+                    label: '글자 크기',
+                    displayValue: `${activeStyle.fontSize}px`,
+                    value: activeStyle.fontSize,
+                    min: 12,
+                    max: 44,
+                    step: 1,
+                    onChange: (fontSize) => handleStyleChange({ fontSize }),
+                  })}
 
                   <div className="flex items-center gap-1.5">
                     <div className="grid grid-cols-4 gap-1 flex-1">
@@ -1113,88 +1204,52 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                   </div>
                 </div>
 
-                {/* Sliders in compact 2-column grid */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <div className="flex justify-between text-[11px] text-stone-600 mb-0.5">
-                      <span>모서리 둥글기</span>
-                      <span className="font-mono font-semibold">
-                        {activeStyle.borderRadius}px
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="36"
-                      value={activeStyle.borderRadius}
-                      onChange={(e) =>
-                        handleStyleChange({
-                          borderRadius: Number(e.target.value),
-                        })
-                      }
-                      className="w-full accent-stone-900"
-                    />
-                  </div>
+                {/* Sliders in compact 2-column grid (tap to reveal slider) */}
+                <div className="grid grid-cols-2 gap-2">
+                  {renderCollapsibleSlider({
+                    sliderKey: 'spacing-borderRadius',
+                    label: '모서리 둥글기',
+                    displayValue: `${activeStyle.borderRadius}px`,
+                    value: activeStyle.borderRadius,
+                    min: 0,
+                    max: 36,
+                    step: 1,
+                    onChange: (borderRadius) =>
+                      handleStyleChange({ borderRadius }),
+                  })}
 
-                  <div>
-                    <div className="flex justify-between text-[11px] text-stone-600 mb-0.5">
-                      <span>상하 여백</span>
-                      <span className="font-mono font-semibold">
-                        {activeStyle.paddingY}px
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="6"
-                      max="36"
-                      value={activeStyle.paddingY}
-                      onChange={(e) =>
-                        handleStyleChange({ paddingY: Number(e.target.value) })
-                      }
-                      className="w-full accent-stone-900"
-                    />
-                  </div>
+                  {renderCollapsibleSlider({
+                    sliderKey: 'spacing-paddingY',
+                    label: '상하 여백',
+                    displayValue: `${activeStyle.paddingY}px`,
+                    value: activeStyle.paddingY,
+                    min: 6,
+                    max: 36,
+                    step: 1,
+                    onChange: (paddingY) => handleStyleChange({ paddingY }),
+                  })}
 
-                  <div>
-                    <div className="flex justify-between text-[11px] text-stone-600 mb-0.5">
-                      <span>좌우 여백</span>
-                      <span className="font-mono font-semibold">
-                        {activeStyle.paddingX}px
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="10"
-                      max="48"
-                      value={activeStyle.paddingX}
-                      onChange={(e) =>
-                        handleStyleChange({ paddingX: Number(e.target.value) })
-                      }
-                      className="w-full accent-stone-900"
-                    />
-                  </div>
+                  {renderCollapsibleSlider({
+                    sliderKey: 'spacing-paddingX',
+                    label: '좌우 여백',
+                    displayValue: `${activeStyle.paddingX}px`,
+                    value: activeStyle.paddingX,
+                    min: 10,
+                    max: 48,
+                    step: 1,
+                    onChange: (paddingX) => handleStyleChange({ paddingX }),
+                  })}
 
-                  <div>
-                    <div className="flex justify-between text-[11px] text-stone-600 mb-0.5">
-                      <span>줄 간격</span>
-                      <span className="font-mono font-semibold">
-                        {(activeStyle.lineHeight ?? 1.5).toFixed(2)}
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="1.1"
-                      max="2.2"
-                      step="0.05"
-                      value={activeStyle.lineHeight ?? 1.5}
-                      onChange={(e) =>
-                        handleStyleChange({
-                          lineHeight: Number(e.target.value),
-                        })
-                      }
-                      className="w-full accent-stone-900"
-                    />
-                  </div>
+                  {renderCollapsibleSlider({
+                    sliderKey: 'spacing-lineHeight',
+                    label: '줄 간격',
+                    displayValue: (activeStyle.lineHeight ?? 1.5).toFixed(2),
+                    value: activeStyle.lineHeight ?? 1.5,
+                    min: 1.1,
+                    max: 2.2,
+                    step: 0.05,
+                    onChange: (lineHeight) => handleStyleChange({ lineHeight }),
+                  })}
                 </div>
               </div>
             </div>
@@ -1295,23 +1350,17 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                       onUpdateSideStyle(activeBatchSide, { fontFamily })
                     }
                   />
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-stone-600">
-                      글자 크기 ({defaultSideStyles[activeBatchSide].fontSize}px)
-                    </span>
-                    <input
-                      type="range"
-                      min="12"
-                      max="44"
-                      value={defaultSideStyles[activeBatchSide].fontSize}
-                      onChange={(e) =>
-                        onUpdateSideStyle(activeBatchSide, {
-                          fontSize: Number(e.target.value),
-                        })
-                      }
-                      className="w-40 accent-stone-900"
-                    />
-                  </div>
+                  {renderCollapsibleSlider({
+                    sliderKey: 'batch-fontSize',
+                    label: '글자 크기',
+                    displayValue: `${defaultSideStyles[activeBatchSide].fontSize}px`,
+                    value: defaultSideStyles[activeBatchSide].fontSize,
+                    min: 12,
+                    max: 44,
+                    step: 1,
+                    onChange: (fontSize) =>
+                      onUpdateSideStyle(activeBatchSide, { fontSize }),
+                  })}
                 </div>
               </div>
             </div>
@@ -1637,48 +1686,30 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                   )}
                 </div>
 
-                {/* Card dimensions & Bubble spacing */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <div className="flex justify-between text-[11px] text-stone-600 mb-0.5">
-                      <span>카드 가로폭</span>
-                      <span className="font-mono font-semibold">
-                        {canvasConfig.width}px
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="480"
-                      max="1080"
-                      step="10"
-                      value={canvasConfig.width}
-                      onChange={(e) =>
-                        onUpdateCanvasConfig({ width: Number(e.target.value) })
-                      }
-                      className="w-full accent-stone-900"
-                    />
-                  </div>
+                {/* Card dimensions & Bubble spacing (tap to reveal slider) */}
+                <div className="grid grid-cols-2 gap-2">
+                  {renderCollapsibleSlider({
+                    sliderKey: 'canvas-width',
+                    label: '카드 가로폭',
+                    displayValue: `${canvasConfig.width}px`,
+                    value: canvasConfig.width,
+                    min: 480,
+                    max: 1080,
+                    step: 10,
+                    onChange: (width) => onUpdateCanvasConfig({ width }),
+                  })}
 
-                  <div>
-                    <div className="flex justify-between text-[11px] text-stone-600 mb-0.5">
-                      <span>말풍선 간격</span>
-                      <span className="font-mono font-semibold">
-                        {canvasConfig.bubbleSpacing}px
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min="8"
-                      max="56"
-                      value={canvasConfig.bubbleSpacing}
-                      onChange={(e) =>
-                        onUpdateCanvasConfig({
-                          bubbleSpacing: Number(e.target.value),
-                        })
-                      }
-                      className="w-full accent-stone-900"
-                    />
-                  </div>
+                  {renderCollapsibleSlider({
+                    sliderKey: 'canvas-bubbleSpacing',
+                    label: '말풍선 간격',
+                    displayValue: `${canvasConfig.bubbleSpacing}px`,
+                    value: canvasConfig.bubbleSpacing,
+                    min: 8,
+                    max: 56,
+                    step: 1,
+                    onChange: (bubbleSpacing) =>
+                      onUpdateCanvasConfig({ bubbleSpacing }),
+                  })}
                 </div>
 
                 {/* Header / Footer toggles */}
