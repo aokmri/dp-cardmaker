@@ -1,0 +1,491 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { X, FileText, ArrowRightLeft, AlignLeft, Layers } from 'lucide-react';
+import { Bubble, DefaultSideStyles } from '../types';
+import { INITIAL_SIDE_STYLES } from '../data/presetFonts';
+
+interface TextImportModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onImport: (newBubbles: Bubble[], mode: 'replace' | 'append') => void;
+  defaultFontFamily: string;
+  defaultSideStyles?: DefaultSideStyles;
+}
+
+interface ParsedNoteItem {
+  text: string;
+  nickname: string;
+}
+
+/**
+ * Parses 이세계 우체통 note format:
+ * 대화1
+ * 닉네임A
+ * •
+ * 214세 9월 11일 (또는 2026. 09. 20. 오후 11:57)
+ */
+function parseMailboxNotes(rawInput: string): {
+  items: ParsedNoteItem[];
+  nicknames: string[];
+  isMailboxFormat: boolean;
+} {
+  const normalized = rawInput.replace(/\r\n/g, '\n');
+  const initialLines = normalized.split('\n');
+
+  // Normalize inline bullet variations into canonical separate lines:
+  // [닉네임] / • / [날짜·시간]
+  const rawLines: string[] = [];
+  const inlineBothRegex =
+    /^(.+?)\s*[•·ㆍ∙⋅]\s*((?:\d+|n)세\s*(?:\d+|n)월\s*(?:\d+|n)일.*|\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?.*|\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}.*|\d+월\s*\d+일.*|\d+\s*(?:초|분|시간|일|주|달|개월|년)\s*전.*)$/i;
+  const leadingBulletDateRegex =
+    /^[•·ㆍ∙⋅]\s+((?:\d+|n)세\s*(?:\d+|n)월\s*(?:\d+|n)일.*|\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?.*|\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}.*|\d+월\s*\d+일.*|\d+\s*(?:초|분|시간|일|주|달|개월|년)\s*전.*)$/i;
+  const trailingBulletNickRegex = /^(.+?)\s+[•·ㆍ∙⋅]$/;
+
+  for (const line of initialLines) {
+    const trimmed = line.trim();
+    const bothMatch = trimmed.match(inlineBothRegex);
+    if (bothMatch && bothMatch[1].trim() && bothMatch[2].trim()) {
+      rawLines.push(bothMatch[1].trim());
+      rawLines.push('•');
+      rawLines.push(bothMatch[2].trim());
+      continue;
+    }
+
+    const leadingMatch = trimmed.match(leadingBulletDateRegex);
+    if (leadingMatch && leadingMatch[1].trim()) {
+      rawLines.push('•');
+      rawLines.push(leadingMatch[1].trim());
+      continue;
+    }
+
+    const trailingMatch = trimmed.match(trailingBulletNickRegex);
+    if (trailingMatch && trailingMatch[1].trim()) {
+      rawLines.push(trailingMatch[1].trim());
+      rawLines.push('•');
+      continue;
+    }
+
+    rawLines.push(line);
+  }
+
+  // Identify indices of bullet separator lines ('•', '·', 'ㆍ', '∙', '⋅')
+  const bulletLineIndices: number[] = [];
+  for (let i = 0; i < rawLines.length; i++) {
+    const trimmed = rawLines[i].trim();
+    if (
+      trimmed === '•' ||
+      trimmed === '·' ||
+      trimmed === 'ㆍ' ||
+      trimmed === '∙' ||
+      trimmed === '⋅'
+    ) {
+      bulletLineIndices.push(i);
+    }
+  }
+
+  if (bulletLineIndices.length > 0) {
+    const items: ParsedNoteItem[] = [];
+    const nicknameSet = new Set<string>();
+    let blockStartIdx = 0;
+
+    for (const bulletIdx of bulletLineIndices) {
+      // Find nickname line: last non-empty line before bulletIdx (>= blockStartIdx)
+      let nickIdx = bulletIdx - 1;
+      while (nickIdx >= blockStartIdx && rawLines[nickIdx].trim() === '') {
+        nickIdx--;
+      }
+
+      // Find date/meta line: first non-empty line after bulletIdx
+      let dateIdx = bulletIdx + 1;
+      while (dateIdx < rawLines.length && rawLines[dateIdx].trim() === '') {
+        dateIdx++;
+      }
+
+      if (nickIdx >= blockStartIdx) {
+        const nickname = rawLines[nickIdx].trim();
+        const dialogueSlice = rawLines.slice(blockStartIdx, nickIdx);
+        // Trim leading and trailing empty lines from the dialogue block
+        while (dialogueSlice.length > 0 && dialogueSlice[0].trim() === '') {
+          dialogueSlice.shift();
+        }
+        while (
+          dialogueSlice.length > 0 &&
+          dialogueSlice[dialogueSlice.length - 1].trim() === ''
+        ) {
+          dialogueSlice.pop();
+        }
+
+        const dialogueText = dialogueSlice.join('\n').trim();
+        if (dialogueText.length > 0) {
+          items.push({
+            text: dialogueText,
+            nickname,
+          });
+          if (nickname) {
+            nicknameSet.add(nickname);
+          }
+        }
+      }
+
+      // Next message block starts after the date line
+      blockStartIdx = dateIdx + 1;
+    }
+
+    // Handle trailing block if user copied up to "대화2 \n 닉네임B" without the last "• \n 날짜"
+    if (blockStartIdx < rawLines.length) {
+      const remaining = rawLines.slice(blockStartIdx);
+      while (remaining.length > 0 && remaining[0].trim() === '') {
+        remaining.shift();
+      }
+      while (
+        remaining.length > 0 &&
+        remaining[remaining.length - 1].trim() === ''
+      ) {
+        remaining.pop();
+      }
+
+      if (remaining.length >= 2) {
+        const lastLine = remaining[remaining.length - 1].trim();
+        const trailingDialogue = remaining
+          .slice(0, remaining.length - 1)
+          .join('\n')
+          .trim();
+        if (trailingDialogue.length > 0 && lastLine.length > 0 && lastLine.length <= 25) {
+          items.push({
+            text: trailingDialogue,
+            nickname: lastLine,
+          });
+          nicknameSet.add(lastLine);
+        }
+      }
+    }
+
+    if (items.length > 0) {
+      return {
+        items,
+        nicknames: Array.from(nicknameSet),
+        isMailboxFormat: true,
+      };
+    }
+  }
+
+  // Fallback for plain text lines if no mailbox markers exist
+  const fallbackParagraphs = normalized
+    .split(/\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  return {
+    items: fallbackParagraphs.map((text) => ({ text, nickname: '' })),
+    nicknames: [],
+    isMailboxFormat: false,
+  };
+}
+
+export const TextImportModal: React.FC<TextImportModalProps> = ({
+  isOpen,
+  onClose,
+  onImport,
+  defaultFontFamily,
+  defaultSideStyles = INITIAL_SIDE_STYLES,
+}) => {
+  const [inputText, setInputText] = useState('');
+  const [alignmentRule, setAlignmentRule] = useState<'alternate' | 'left' | 'right'>('alternate');
+  const [importMode, setImportMode] = useState<'replace' | 'append'>('replace');
+  const [nicknameSideMap, setNicknameSideMap] = useState<Record<string, 'left' | 'right'>>({});
+
+  const parsed = useMemo(() => parseMailboxNotes(inputText), [inputText]);
+
+  // Initialize default left/right mapping whenever detected nicknames change
+  useEffect(() => {
+    if (parsed.nicknames.length === 0) return;
+    setNicknameSideMap((prev) => {
+      const next: Record<string, 'left' | 'right'> = {};
+      parsed.nicknames.forEach((nick, idx) => {
+        if (prev[nick]) {
+          next[nick] = prev[nick];
+        } else {
+          next[nick] = idx % 2 === 0 ? 'left' : 'right';
+        }
+      });
+      return next;
+    });
+  }, [parsed.nicknames]);
+
+  if (!isOpen) return null;
+
+  const handleSelectNicknameSide = (targetNick: string, side: 'left' | 'right') => {
+    setNicknameSideMap((prev) => {
+      const next = { ...prev, [targetNick]: side };
+      // When exactly 2 nicknames exist, automatically assign the opposite side to the other nickname
+      if (parsed.nicknames.length === 2) {
+        const otherNick = parsed.nicknames.find((n) => n !== targetNick);
+        if (otherNick) {
+          next[otherNick] = side === 'left' ? 'right' : 'left';
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleSwapSides = () => {
+    setNicknameSideMap((prev) => {
+      const next: Record<string, 'left' | 'right'> = {};
+      for (const nick of parsed.nicknames) {
+        next[nick] = (prev[nick] || 'left') === 'left' ? 'right' : 'left';
+      }
+      return next;
+    });
+  };
+
+  const handleProcessImport = () => {
+    if (!inputText.trim() || parsed.items.length === 0) return;
+
+    const startY = 80;
+    const spacing = 100;
+
+    const generatedBubbles: Bubble[] = parsed.items.map((item, index) => {
+      let align: 'left' | 'right' | 'center' = 'left';
+
+      if (alignmentRule === 'alternate') {
+        if (item.nickname && nicknameSideMap[item.nickname]) {
+          align = nicknameSideMap[item.nickname];
+        } else {
+          align = index % 2 === 0 ? 'left' : 'right';
+        }
+      } else if (alignmentRule === 'right') {
+        align = 'right';
+      } else {
+        align = 'left';
+      }
+
+      const sideStyle = defaultSideStyles[align] || defaultSideStyles.left;
+
+      const bubble: Bubble = {
+        id: `bubble-${Date.now()}-${index}`,
+        text: item.text,
+        speaker: '',
+        align,
+        x: align === 'left' ? 8 : 45,
+        y: startY + index * spacing,
+        fontFamily: sideStyle.fontFamily || defaultFontFamily,
+        fontSize: sideStyle.fontSize,
+        color: sideStyle.color,
+        bgColor: sideStyle.bgColor,
+        isBold: sideStyle.isBold,
+        isItalic: sideStyle.isItalic,
+        isStrikethrough: sideStyle.isStrikethrough,
+        isUnderline: sideStyle.isUnderline,
+        textAlign: sideStyle.textAlign,
+        borderRadius: sideStyle.borderRadius,
+        cornerStyle: 'directional',
+        paddingY: sideStyle.paddingY,
+        paddingX: sideStyle.paddingX,
+        hasShadow: sideStyle.hasShadow,
+        hasBorder: sideStyle.hasBorder,
+        borderColor: sideStyle.borderColor,
+        letterSpacing: sideStyle.letterSpacing,
+        lineHeight: sideStyle.lineHeight,
+        customStyleKeys: [],
+      };
+
+      return bubble;
+    });
+
+    onImport(generatedBubbles, importMode);
+    onClose();
+  };
+
+  return (
+    <div
+      id="text-import-modal-backdrop"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4 backdrop-blur-xs"
+      onClick={onClose}
+    >
+      <div
+        id="text-import-modal"
+        className="w-full max-w-xl rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl transition-all"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-800">
+              <FileText className="h-4 w-4" />
+            </div>
+            <h2 className="text-lg font-semibold text-stone-900">
+              쪽지 일괄 변환
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-4">
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-stone-700">
+                쪽지 텍스트 붙여넣기
+              </label>
+              {parsed.items.length > 0 && (
+                <span className="text-[11px] font-medium text-amber-800">
+                  대화 {parsed.items.length}개 추출됨
+                </span>
+              )}
+            </div>
+            <textarea
+              rows={9}
+              placeholder={`이세계 우체통에서 나눈 쪽지를 복사하여 붙여넣으면 말풍선으로 변환됩니다.\n예:\n대화1\n닉네임A\n•\nn세 n월 n일\n대화2\n닉네임B\n•\nn세 n월 n일`}
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              className="mt-1.5 w-full rounded-xl border border-stone-200 p-3.5 text-sm text-stone-800 placeholder-stone-400 focus:border-stone-900 focus:outline-none"
+            />
+          </div>
+
+          {/* Detected Nicknames Left/Right Selector */}
+          {alignmentRule === 'alternate' && parsed.nicknames.length > 0 && (
+            <div className="rounded-xl border border-stone-200 bg-stone-50/90 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-stone-700">
+                  닉네임별 말풍선 위치 선택
+                </span>
+                {parsed.nicknames.length >= 2 && (
+                  <button
+                    type="button"
+                    onClick={handleSwapSides}
+                    className="inline-flex items-center gap-1 rounded-md border border-stone-200 bg-white px-2 py-0.5 text-[11px] font-medium text-stone-700 hover:bg-stone-100 transition cursor-pointer"
+                  >
+                    <ArrowRightLeft className="h-3 w-3 text-amber-700" />
+                    좌우 맞바꾸기
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {parsed.nicknames.map((nick) => {
+                  const currentSide = nicknameSideMap[nick] || 'left';
+                  return (
+                    <div
+                      key={nick}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2"
+                    >
+                      <span className="truncate text-xs font-semibold text-stone-800">
+                        {nick}
+                      </span>
+                      <div className="flex items-center rounded-lg bg-stone-100 p-0.5 text-[11px] shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectNicknameSide(nick, 'left')}
+                          className={`rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
+                            currentSide === 'left'
+                              ? 'bg-stone-900 text-white shadow-2xs'
+                              : 'text-stone-600 hover:text-stone-900'
+                          }`}
+                        >
+                          왼쪽
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectNicknameSide(nick, 'right')}
+                          className={`rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
+                            currentSide === 'right'
+                              ? 'bg-stone-900 text-white shadow-2xs'
+                              : 'text-stone-600 hover:text-stone-900'
+                          }`}
+                        >
+                          오른쪽
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-stone-700">배치 방향</label>
+              <div className="mt-1.5 flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setAlignmentRule('alternate')}
+                  className={`flex flex-1 items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition cursor-pointer ${
+                    alignmentRule === 'alternate'
+                      ? 'border-stone-900 bg-stone-900 text-white'
+                      : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                  }`}
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                  좌우 교차
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAlignmentRule('left')}
+                  className={`flex flex-1 items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition cursor-pointer ${
+                    alignmentRule === 'left'
+                      ? 'border-stone-900 bg-stone-900 text-white'
+                      : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                  }`}
+                >
+                  <AlignLeft className="h-3.5 w-3.5" />
+                  왼쪽 정렬
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-stone-700">추가 방식</label>
+              <div className="mt-1.5 flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setImportMode('replace')}
+                  className={`flex flex-1 items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition cursor-pointer ${
+                    importMode === 'replace'
+                      ? 'border-stone-900 bg-stone-900 text-white'
+                      : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                  }`}
+                >
+                  전체 교체
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportMode('append')}
+                  className={`flex flex-1 items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition cursor-pointer ${
+                    importMode === 'append'
+                      ? 'border-stone-900 bg-stone-900 text-white'
+                      : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                  }`}
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  뒤에 추가
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-stone-200 px-4 py-2 text-xs font-medium text-stone-600 hover:bg-stone-50 cursor-pointer"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={handleProcessImport}
+              disabled={!inputText.trim() || parsed.items.length === 0}
+              className="rounded-lg bg-stone-900 px-4 py-2 text-xs font-medium text-white hover:bg-stone-800 disabled:opacity-40 transition cursor-pointer"
+            >
+              말풍선으로 변환 생성
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
