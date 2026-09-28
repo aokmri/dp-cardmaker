@@ -423,8 +423,158 @@ function stripWeightSuffix(str: string): string {
     .replace(/[RLBM]$/, '');
 }
 
-function getFontSearchKeys(font: WebFont): string[] {
+const CHOSEONG_NAVER = [
+  'g', 'gg', 'n', 'd', 'dd', 'r', 'm', 'b', 'bb', 's', 'ss', '', 'j', 'jj', 'ch', 'k', 't', 'p', 'h',
+];
+const CHOSEONG_RR = [
+  'g', 'kk', 'n', 'd', 'tt', 'r', 'm', 'b', 'pp', 's', 'ss', '', 'j', 'jj', 'ch', 'k', 't', 'p', 'h',
+];
+const JUNGSEONG_TABLE = [
+  'a', 'ae', 'ya', 'yae', 'eo', 'e', 'yeo', 'ye', 'o', 'wa', 'wae', 'oe', 'yo', 'u', 'wo', 'we', 'wi', 'yu', 'eu', 'ui', 'i',
+];
+const JONGSEONG_NAVER = [
+  '', 'k', 'kk', 'ks', 'n', 'nj', 'nh', 't', 'l', 'rk', 'rm', 'rb', 'rs', 'rt', 'rp', 'rh', 'm', 'p', 'ps', 't', 'ss', 'ng', 't', 't', 'k', 't', 'p', 'h',
+];
+const JONGSEONG_RR = [
+  '', 'k', 'k', 'ks', 'n', 'nj', 'nh', 't', 'l', 'lg', 'lm', 'lb', 'ls', 'lt', 'lp', 'lh', 'm', 'p', 'ps', 't', 't', 'ng', 't', 't', 'k', 't', 'p', 't',
+];
+const JONGSEONG_VOICED = [
+  '', 'g', 'gg', 'gs', 'n', 'nj', 'nh', 'd', 'l', 'lg', 'lm', 'lb', 'ls', 'lt', 'lp', 'lh', 'm', 'b', 'bs', 's', 'ss', 'ng', 'j', 'ch', 'k', 't', 'p', 'h',
+];
+
+const COLLOQUIAL_SYLLABLE_MAP: Record<string, string> = {
+  박: 'park',
+  김: 'kim',
+  강: 'kang',
+  권: 'kwon',
+  구: 'koo',
+  규: 'kyu',
+  희: 'hee',
+  우: 'woo',
+  유: 'yoo',
+  윤: 'yoon',
+  현: 'hyun',
+  형: 'hyung',
+  경: 'kyung',
+  정: 'jung',
+  성: 'sung',
+  선: 'sun',
+  영: 'young',
+  신: 'shin',
+  심: 'shim',
+  임: 'lim',
+  이: 'lee',
+};
+
+function romanizeHangulString(
+  text: string,
+  choseongTable: string[],
+  jongseongTable: string[],
+  useColloquial = false
+): string {
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (useColloquial && COLLOQUIAL_SYLLABLE_MAP[ch]) {
+      out += COLLOQUIAL_SYLLABLE_MAP[ch];
+      continue;
+    }
+    const code = ch.charCodeAt(0);
+    if (code >= 0xac00 && code <= 0xd7a3) {
+      const offset = code - 0xac00;
+      const cho = Math.floor(offset / 588);
+      const jung = Math.floor((offset % 588) / 28);
+      const jong = offset % 28;
+      out +=
+        (choseongTable[cho] ?? '') +
+        (JUNGSEONG_TABLE[jung] ?? '') +
+        (jongseongTable[jong] ?? '');
+    } else if (/[a-zA-Z0-9]/.test(ch)) {
+      out += ch.toLowerCase();
+    }
+  }
+  return out;
+}
+
+function generateRomanizedVariants(koreanText: string): string[] {
+  const variants = new Set<string>();
+  const trimmed = koreanText.trim();
+  if (!trimmed || !/[가-힣]/.test(trimmed)) return [];
+
+  const baseForms = [trimmed];
+  if (trimmed.endsWith('체') && trimmed.length > 1) {
+    baseForms.push(trimmed.slice(0, -1));
+  } else {
+    baseForms.push(`${trimmed}체`);
+  }
+
+  for (const form of baseForms) {
+    const v1 = romanizeHangulString(form, CHOSEONG_NAVER, JONGSEONG_NAVER, false);
+    const v2 = romanizeHangulString(form, CHOSEONG_RR, JONGSEONG_RR, false);
+    const v3 = romanizeHangulString(form, CHOSEONG_NAVER, JONGSEONG_VOICED, false);
+    const v4 = romanizeHangulString(form, CHOSEONG_NAVER, JONGSEONG_NAVER, true);
+    if (v1) variants.add(v1);
+    if (v2) variants.add(v2);
+    if (v3) variants.add(v3);
+    if (v4) variants.add(v4);
+  }
+
+  return Array.from(variants);
+}
+
+/**
+ * Converts a Latin font name into a syllable-preserving phonetic skeleton
+ * so spelling variations (e.g. NanumGiBbeumBarkEum vs GibbemBalgeum vs NanumGippeumBalkeum)
+ * produce the exact same phonetic key.
+ */
+function toPhoneticKey(str: string): string {
+  const s = normalizeCompactKey(stripWeightSuffix(str));
+  if (!s || /[가-힣]/.test(s)) return '';
+  return s
+    .replace(/nanumsongeulssi/g, 'nanum')
+    .replace(/ownglyph|ongleip|ongleeb/g, 'onglip')
+    .replace(/tthakgyoansim|hakgyoansim|schoolsafety|schoolsafe/g, 'hakgyoansim')
+    .replace(/kyobohandwriting/g, 'kyobo')
+    .replace(/uhbee|avi|abi/g, 'uhbee')
+    .replace(/(?:che|font|script|handwriting)$/g, '')
+    .replace(/park/g, 'pak')
+    .replace(/rk|lk|lg/g, 'lk')
+    .replace(/rm|lm/g, 'lm')
+    .replace(/rb|lb/g, 'lb')
+    .replace(/ch/g, 'c')
+    .replace(/sh/g, 's')
+    .replace(/ph/g, 'p')
+    .replace(/woo/g, 'u')
+    .replace(/yoo/g, 'yu')
+    .replace(/ee/g, 'i')
+    .replace(/ea/g, 'ae')
+    .replace(/[kgq]+/g, 'k')
+    .replace(/[dt]+/g, 't')
+    .replace(/[bpv]+/g, 'p')
+    .replace(/[jz]+/g, 'j')
+    .replace(/[rl]+/g, 'r')
+    .replace(/s+/g, 's')
+    .replace(/n+/g, 'n')
+    .replace(/m+/g, 'm')
+    .replace(/h+/g, 'h')
+    .replace(/[aeiouyw]+/g, 'a');
+}
+
+interface CachedFontKeys {
+  exactKeys: string[];
+  phoneticKeys: string[];
+}
+
+const fontSearchKeyCache = new Map<string, CachedFontKeys>();
+
+function getFontSearchData(font: WebFont): CachedFontKeys {
+  const cacheId = `${font.id}::${font.name}::${font.family}`;
+  const cached = fontSearchKeyCache.get(cacheId);
+  if (cached) return cached;
+
   const keys = new Set<string>();
+  const phoneticSet = new Set<string>();
+
   const addKey = (val: string) => {
     const clean = normalizeCompactKey(val);
     if (clean && clean.length >= 2) {
@@ -433,6 +583,12 @@ function getFontSearchKeys(font: WebFont): string[] {
         keys.add(clean.slice(0, -1));
       } else if (/[가-힣]$/.test(clean)) {
         keys.add(`${clean}체`);
+      }
+      if (!/[가-힣]/.test(clean)) {
+        const pk = toPhoneticKey(clean);
+        if (pk && pk.length >= 3) {
+          phoneticSet.add(pk);
+        }
       }
     }
   };
@@ -456,7 +612,167 @@ function getFontSearchKeys(font: WebFont): string[] {
     }
   }
 
-  return Array.from(keys);
+  // Generate Korean & Romanized aliases (e.g. '나눔손글씨 기쁨밝음' -> 'NanumGiBbeumBarkEum', '기쁨밝음', etc.)
+  if (/[가-힣]/.test(font.name)) {
+    for (const rom of generateRomanizedVariants(font.name)) {
+      addKey(rom);
+    }
+
+    const isNaverHandFont =
+      /^나눔\s*손글씨/.test(font.name) ||
+      font.id.startsWith('nanum-') ||
+      Boolean(font.cssRule && font.cssRule.includes('naverfont_'));
+
+    const foundryRules: {
+      pattern: RegExp;
+      korPrefixes: string[];
+      engPrefixes: string[];
+    }[] = [
+      {
+        pattern: /^나눔\s*손글씨\s*/,
+        korPrefixes: ['나눔손글씨', '나눔', ''],
+        engPrefixes: ['nanum', 'nanumsongeulssi', ''],
+      },
+      {
+        pattern: /^온글잎\s*/,
+        korPrefixes: ['온글잎', ''],
+        engPrefixes: ['ownglyph', 'ongleip', 'ongleeb', ''],
+      },
+      {
+        pattern: /^학교안심\s*/,
+        korPrefixes: ['학교안심', ''],
+        engPrefixes: ['hakgyoansim', 'tthakgyoansim', 'schoolsafety', 'schoolsafe', ''],
+      },
+      {
+        pattern: /^교보\s*손글씨\s*(\d+\s*)?/,
+        korPrefixes: ['교보손글씨', '교보', ''],
+        engPrefixes: ['kyobohandwriting', 'kyobo', ''],
+      },
+      {
+        pattern: /^카페24\s*/i,
+        korPrefixes: ['카페24', ''],
+        engPrefixes: ['cafe24', ''],
+      },
+      {
+        pattern: /^어비\s*/,
+        korPrefixes: ['어비', ''],
+        engPrefixes: ['uhbee', 'avi', 'abi', ''],
+      },
+      {
+        pattern: /^그리운\s*/,
+        korPrefixes: ['그리운', ''],
+        engPrefixes: ['griun', 'nostalgic', 'missed', ''],
+      },
+      {
+        pattern: /^윤?초록우산어린이\s*/,
+        korPrefixes: ['윤초록우산어린이', '초록우산어린이', ''],
+        engPrefixes: ['yoonchildfundkorea', 'yunchorokwoosaneorini', 'yoonchowoosan', ''],
+      },
+      {
+        pattern: /^인천교육\s*/,
+        korPrefixes: ['인천교육', ''],
+        engPrefixes: ['ice', 'incheoneducation', 'incheongyoyuk', ''],
+      },
+      {
+        pattern: /^강원교육\s*/,
+        korPrefixes: ['강원교육', ''],
+        engPrefixes: ['gangwonedu', 'gangwoneducation', 'gangwongyoyuk', ''],
+      },
+      {
+        pattern: /^전남교육\s*/,
+        korPrefixes: ['전남교육', ''],
+        engPrefixes: ['jne', 'jeonnameducation', 'jeonnamgyoyuk', ''],
+      },
+      {
+        pattern: /^전주완판본\s*/,
+        korPrefixes: ['전주완판본', ''],
+        engPrefixes: ['jeonjuwanpanbon', 'jeonju', ''],
+      },
+      {
+        pattern: /^KCC\s*/i,
+        korPrefixes: ['kcc', ''],
+        engPrefixes: ['kcc', ''],
+      },
+    ];
+
+    let matchedRule = false;
+    for (const rule of foundryRules) {
+      if (rule.pattern.test(font.name)) {
+        matchedRule = true;
+        const coreKor = font.name.replace(rule.pattern, '').trim();
+        if (coreKor) {
+          for (const kp of rule.korPrefixes) {
+            addKey(`${kp}${coreKor}`);
+          }
+          const coreRoms = generateRomanizedVariants(coreKor);
+          for (const rom of coreRoms) {
+            for (const ep of rule.engPrefixes) {
+              addKey(`${ep}${rom}`);
+            }
+          }
+        }
+      }
+    }
+
+    if (!matchedRule && isNaverHandFont) {
+      const coreKor = font.name.replace(/^나눔\s*/, '').trim();
+      addKey(`나눔손글씨${coreKor}`);
+      addKey(`나눔${coreKor}`);
+      for (const rom of generateRomanizedVariants(coreKor)) {
+        addKey(`nanum${rom}`);
+        addKey(`nanumsongeulssi${rom}`);
+        addKey(rom);
+      }
+    }
+  }
+
+  const result: CachedFontKeys = {
+    exactKeys: Array.from(keys),
+    phoneticKeys: Array.from(phoneticSet),
+  };
+  fontSearchKeyCache.set(cacheId, result);
+  return result;
+}
+
+function getFontSearchKeys(font: WebFont): string[] {
+  return getFontSearchData(font).exactKeys;
+}
+
+/**
+ * Checks whether a single font matches a user search query (supports Korean, English family, and Romanized names).
+ */
+export function doesFontMatchQuery(font: WebFont, query: string): boolean {
+  const cleanQuery = normalizeCompactKey(query);
+  if (!cleanQuery) return true;
+  const strippedQuery = normalizeCompactKey(stripWeightSuffix(query));
+  const { exactKeys, phoneticKeys } = getFontSearchData(font);
+
+  if (
+    exactKeys.some(
+      (k) =>
+        k.includes(cleanQuery) ||
+        (strippedQuery.length >= 2 && k.includes(strippedQuery)) ||
+        (cleanQuery.length >= 2 && cleanQuery.includes(k))
+    )
+  ) {
+    return true;
+  }
+
+  if (!/[가-힣]/.test(cleanQuery) && cleanQuery.length >= 3) {
+    const queryPhonetic = toPhoneticKey(cleanQuery);
+    if (
+      queryPhonetic.length >= 3 &&
+      phoneticKeys.some(
+        (pk) =>
+          pk.includes(queryPhonetic) ||
+          (queryPhonetic.length >= 4 && queryPhonetic.includes(pk))
+      )
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -467,26 +783,53 @@ export function matchBuiltInFont(candidate: string, fonts: WebFont[]): WebFont |
   const strippedCandidate = normalizeCompactKey(stripWeightSuffix(candidate));
   if (!cleanCandidate) return null;
 
-  // 1. Exact key match
+  // 1. Exact key match (including generated Korean & Romanized aliases like NanumGiBbeumBarkEum)
   for (const font of fonts) {
-    const keys = getFontSearchKeys(font);
+    const { exactKeys } = getFontSearchData(font);
     if (
-      keys.includes(cleanCandidate) ||
-      (strippedCandidate.length >= 2 && keys.includes(strippedCandidate))
+      exactKeys.includes(cleanCandidate) ||
+      (strippedCandidate.length >= 2 && exactKeys.includes(strippedCandidate))
     ) {
       return font;
     }
   }
 
-  // 2. Partial / substring match for sufficiently specific names (>= 3 chars)
+  // 2. Exact phonetic key match (handles spelling differences like GibbemBalgeum vs GiBbeumBarkEum)
+  const candidatePhonetic = toPhoneticKey(candidate);
+  if (candidatePhonetic.length >= 4) {
+    for (const font of fonts) {
+      const { phoneticKeys } = getFontSearchData(font);
+      if (phoneticKeys.includes(candidatePhonetic)) {
+        return font;
+      }
+    }
+  }
+
+  // 3. Partial / substring match on exactKeys for sufficiently specific names (>= 3 chars)
   if (cleanCandidate.length >= 3) {
     for (const font of fonts) {
-      const keys = getFontSearchKeys(font);
+      const { exactKeys } = getFontSearchData(font);
       if (
-        keys.some(
+        exactKeys.some(
           (k) =>
             k.length >= 3 &&
             (k.includes(cleanCandidate) || cleanCandidate.includes(k))
+        )
+      ) {
+        return font;
+      }
+    }
+  }
+
+  // 4. Partial phonetic match for longer Latin font names (>= 5 phonetic chars)
+  if (candidatePhonetic.length >= 5) {
+    for (const font of fonts) {
+      const { phoneticKeys } = getFontSearchData(font);
+      if (
+        phoneticKeys.some(
+          (pk) =>
+            pk.length >= 5 &&
+            (pk.includes(candidatePhonetic) || candidatePhonetic.includes(pk))
         )
       ) {
         return font;
@@ -628,22 +971,30 @@ export function searchBuiltInFonts(query: string, fonts: WebFont[], limit = 8): 
   const strippedQuery = normalizeCompactKey(stripWeightSuffix(query));
   if (!cleanQuery) return [];
 
+  const queryPhonetic = toPhoneticKey(query);
   const exactMatches: WebFont[] = [];
   const partialMatches: WebFont[] = [];
 
   for (const font of fonts) {
-    const keys = getFontSearchKeys(font);
+    const { exactKeys, phoneticKeys } = getFontSearchData(font);
     if (
-      keys.includes(cleanQuery) ||
-      (strippedQuery.length >= 2 && keys.includes(strippedQuery))
+      exactKeys.includes(cleanQuery) ||
+      (strippedQuery.length >= 2 && exactKeys.includes(strippedQuery)) ||
+      (queryPhonetic.length >= 4 && phoneticKeys.includes(queryPhonetic))
     ) {
       exactMatches.push(font);
     } else if (
-      keys.some(
+      exactKeys.some(
         (k) =>
           k.includes(cleanQuery) ||
           (cleanQuery.length >= 2 && cleanQuery.includes(k))
-      )
+      ) ||
+      (queryPhonetic.length >= 4 &&
+        phoneticKeys.some(
+          (pk) =>
+            pk.includes(queryPhonetic) ||
+            (queryPhonetic.length >= 5 && queryPhonetic.includes(pk))
+        ))
     ) {
       partialMatches.push(font);
     }

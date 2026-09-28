@@ -19,6 +19,7 @@ import {
   detectFontsFromClipboard,
   DetectedFontCandidate,
   requestClipboardWithPermission,
+  doesFontMatchQuery,
 } from '../utils/fontLoader';
 import { ClipboardGuideModal } from './ClipboardGuideModal';
 
@@ -392,10 +393,7 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
               <div className="grid gap-2 sm:grid-cols-2">
                 {fonts
                   .filter(
-                    (f) =>
-                      !presetSearch.trim() ||
-                      f.name.toLowerCase().includes(presetSearch.trim().toLowerCase()) ||
-                      f.family.toLowerCase().includes(presetSearch.trim().toLowerCase())
+                    (f) => !presetSearch.trim() || doesFontMatchQuery(f, presetSearch)
                   )
                   .map((f) => {
                     const isSelected = currentFamily.includes(f.name) || currentFamily === f.family;

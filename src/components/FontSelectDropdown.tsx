@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check, Search, X } from 'lucide-react';
 import { WebFont } from '../types';
+import { doesFontMatchQuery } from '../utils/fontLoader';
 
 interface FontSelectDropdownProps {
   fonts: WebFont[];
@@ -48,10 +49,7 @@ export const FontSelectDropdown: React.FC<FontSelectDropdownProps> = ({
 
   const filteredFonts = fonts.filter((f) => {
     if (!searchQuery.trim()) return true;
-    const q = searchQuery.trim().toLowerCase();
-    return (
-      f.name.toLowerCase().includes(q) || f.family.toLowerCase().includes(q)
-    );
+    return doesFontMatchQuery(f, searchQuery);
   });
 
   return (
