@@ -590,10 +590,10 @@ export default function App() {
           <div className="mb-3 md:mb-4 flex items-center justify-between gap-2 w-full max-w-[800px] text-xs text-stone-500">
             <div className="flex items-center gap-2 min-w-0">
               <span className="truncate text-stone-700 font-semibold">
-                대화 카드 메이커
+                이체통 출력소
               </span>
               <span className="truncate text-stone-500">
-                이세계 우체통 백업 특화
+                이세계 우체통 특화 카드 메이커
               </span>
             </div>
           </div>
@@ -632,7 +632,7 @@ export default function App() {
             </span>
           </div>
 
-          <p className="mt-4 text-center text-[10pt] text-stone-400">
+          <p className="mt-4 text-center text-[8pt] text-stone-400">
             해당 사이트는 바이브 코딩으로 제작되었습니다.
           </p>
         </main>
