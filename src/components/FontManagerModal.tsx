@@ -8,7 +8,6 @@ import {
   Sparkles,
   Check,
   ClipboardPaste,
-  Eye,
 } from 'lucide-react';
 import { WebFont } from '../types';
 import {
@@ -60,14 +59,9 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
 
   // Font detector state
   const [detectInput, setDetectInput] = useState('');
-  const [detectSampleText, setDetectSampleText] = useState('');
   const [detectedCandidates, setDetectedCandidates] = useState<DetectedFontCandidate[]>([]);
   const [detectStatus, setDetectStatus] = useState<string>('');
   const [appliedNotice, setAppliedNotice] = useState<string | null>(null);
-  const [showVisualCompare, setShowVisualCompare] = useState(false);
-  const [compareCategory, setCompareCategory] = useState<
-    'serif' | 'sans' | 'handwriting' | 'display'
-  >('serif');
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [permissionState, setPermissionState] = useState<
     PermissionState | 'unknown'
@@ -86,7 +80,6 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
 
       if (effectiveText) {
         setDetectInput(effectiveText);
-        setDetectSampleText(effectiveText.slice(0, 50));
       }
 
       const results = detectFontsFromClipboard(
@@ -101,19 +94,17 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
         const builtInMatches = results.filter((r) => r.matchedFont !== null);
         if (builtInMatches.length > 0) {
           setDetectStatus(
-            `총 ${results.length}개의 글꼴 후보 중 사이트 내장 글꼴 ${builtInMatches.length}개를 찾았습니다! 아래 버튼을 눌러 바로 적용해보세요.`
+            `총 ${results.length}개의 폰트 후보 중 사이트 내장 폰트 ${builtInMatches.length}개를 찾았습니다! 아래 버튼을 눌러 바로 적용해보세요.`
           );
-          setShowVisualCompare(false);
         } else {
           setDetectStatus(
-            `총 ${results.length}개의 글꼴 후보를 발견했으나 사이트 내장 목록에는 없습니다. 아래 구글 검색으로 웹폰트 코드를 찾아 추가해보세요.`
+            `총 ${results.length}개의 폰트 후보를 발견했으나 사이트 내장 목록에는 없습니다. 아래 구글 검색으로 웹폰트 코드를 찾아 추가해보세요.`
           );
         }
       } else {
         setDetectStatus(
-          '복사된 텍스트에 글꼴 소스(HTML)가 포함되어 있지 않습니다. 아래에서 글꼴 모양을 직접 비교하거나 구글 검색으로 찾아보세요.'
+          '복사된 텍스트에 폰트 소스(HTML)가 포함되어 있지 않습니다.'
         );
-        setShowVisualCompare(true);
       }
     },
     [fonts]
@@ -254,10 +245,6 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
       onRemoveFont(fontId);
     }
   };
-
-  const compareFonts = fonts.filter((f) => f.category === compareCategory);
-  const detectPreviewPhrase =
-    detectSampleText || detectInput.trim().slice(0, 50) || previewText;
 
   return (
     <div
@@ -656,97 +643,6 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
                     </div>
                   </div>
                 )}
-
-                {/* Visual Font Comparison Toggle */}
-                <div className="pt-2 border-t border-stone-200">
-                  <button
-                    type="button"
-                    onClick={() => setShowVisualCompare((prev) => !prev)}
-                    className="flex w-full items-center justify-between text-xs font-semibold text-amber-900 hover:text-amber-950 py-1 cursor-pointer"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <Eye className="h-4 w-4 text-amber-700" />
-                      복사한 문구로 글꼴 모양 직접 비교하기
-                    </span>
-                    <span className="text-[11px] text-amber-700">
-                      {showVisualCompare ? '접기 ▲' : '열기 ▼'}
-                    </span>
-                  </button>
-
-                  {showVisualCompare && (
-                    <div className="mt-2.5 space-y-2.5">
-                      <div className="grid grid-cols-4 gap-1.5">
-                        {(
-                          [
-                            { id: 'serif', label: '명조/바탕' },
-                            { id: 'sans', label: '고딕/돋움' },
-                            { id: 'handwriting', label: '손글씨' },
-                            { id: 'display', label: '장식/특수' },
-                          ] as const
-                        ).map((cat) => (
-                          <button
-                            key={cat.id}
-                            type="button"
-                            onClick={() => setCompareCategory(cat.id)}
-                            className={`rounded-lg py-1.5 text-xs font-semibold transition cursor-pointer ${
-                              compareCategory === cat.id
-                                ? 'bg-stone-800 text-white'
-                                : 'bg-stone-50 text-stone-600 border border-stone-200 hover:bg-stone-100'
-                            }`}
-                          >
-                            {cat.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="max-h-56 overflow-y-auto grid gap-1.5 sm:grid-cols-2 pr-0.5">
-                        {compareFonts.map((f) => {
-                          const isSelected =
-                            currentFamily === f.family ||
-                            currentFamily.includes(f.name);
-                          return (
-                            <button
-                              key={f.id}
-                              type="button"
-                              onClick={() => {
-                                onSelectFont(f.family);
-                                setAppliedNotice(
-                                  `'${f.name}' 내장 글꼴로 적용되었습니다!`
-                                );
-                              }}
-                              className={`flex items-center justify-between gap-2 rounded-xl border p-2.5 text-left transition cursor-pointer ${
-                                isSelected
-                                  ? 'border-emerald-400 bg-emerald-50/70'
-                                  : 'border-stone-200 bg-white hover:bg-stone-50'
-                              }`}
-                            >
-                              <div className="min-w-0 flex-1">
-                                <p className="text-[11px] font-medium text-stone-400">
-                                  {f.name}
-                                </p>
-                                <p
-                                  className="truncate text-sm text-stone-900 mt-0.5"
-                                  style={{ fontFamily: f.family }}
-                                >
-                                  {detectPreviewPhrase}
-                                </p>
-                              </div>
-                              <span
-                                className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${
-                                  isSelected
-                                    ? 'bg-emerald-600 text-white'
-                                    : 'bg-stone-100 text-stone-700'
-                                }`}
-                              >
-                                {isSelected ? '적용됨' : '적용'}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
           )}

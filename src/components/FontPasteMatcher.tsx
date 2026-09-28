@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Check, Sparkles, X, ClipboardPaste, Eye } from 'lucide-react';
+import { Check, Sparkles, X, ClipboardPaste } from 'lucide-react';
 import { WebFont } from '../types';
 import {
   detectFontsFromClipboard,
@@ -35,14 +35,9 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
-  const [sampleText, setSampleText] = useState('');
   const [results, setResults] = useState<DetectedFontCandidate[]>([]);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [appliedFontName, setAppliedFontName] = useState<string | null>(null);
-  const [showVisualCompare, setShowVisualCompare] = useState(false);
-  const [compareCategory, setCompareCategory] = useState<
-    'serif' | 'sans' | 'handwriting' | 'display'
-  >('serif');
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [permissionState, setPermissionState] = useState<
     PermissionState | 'unknown'
@@ -62,7 +57,6 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
       if (effectiveText) {
         const clipped = effectiveText.slice(0, 60);
         setInputValue(clipped);
-        setSampleText(clipped.slice(0, 40));
       }
 
       const detected = detectFontsFromClipboard(
@@ -81,7 +75,6 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
           setStatusMsg(
             `내장 폰트 ${builtInCount}개를 찾았습니다! 아래 버튼을 눌러 바로 적용하세요.`
           );
-          setShowVisualCompare(false);
         } else {
           setStatusMsg(
             `폰트(${detected.map((d) => d.rawName).join(', ')})를 감지했으나 내장 목록에 없습니다.`
@@ -89,9 +82,8 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
         }
       } else {
         setStatusMsg(
-          '복사된 텍스트에 폰트 소스(HTML)가 포함되어 있지 않습니다. 아래에서 폰트 모양을 직접 비교해 보세요.'
+          '복사된 텍스트에 폰트 소스(HTML)가 포함되어 있지 않습니다.'
         );
-        setShowVisualCompare(true);
       }
     },
     [fonts]
@@ -203,10 +195,6 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
     );
   }
 
-  const compareFonts = fonts.filter((f) => f.category === compareCategory);
-  const previewPhrase =
-    sampleText || inputValue.trim() || '이세계에서 도착한 편지입니다.';
-
   return (
     <div className="mt-1.5 rounded-xl border border-amber-200 bg-amber-50/50 p-2.5 space-y-2">
       <div className="flex items-center justify-between">
@@ -221,7 +209,6 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
             setResults([]);
             setStatusMsg(null);
             setInputValue('');
-            setShowVisualCompare(false);
           }}
           className="rounded p-0.5 text-stone-400 hover:bg-stone-200/60 hover:text-stone-700"
           title="닫기"
@@ -380,91 +367,6 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
           })}
         </div>
       )}
-
-      {/* Visual Font Comparison Toggle */}
-      <div className="pt-1 border-t border-amber-200/70">
-        <button
-          type="button"
-          onClick={() => setShowVisualCompare((prev) => !prev)}
-          className="flex w-full items-center justify-between text-[11px] font-medium text-amber-900 hover:text-amber-950 py-0.5 cursor-pointer"
-        >
-          <span className="flex items-center gap-1">
-            <Eye className="h-3.5 w-3.5 text-amber-700" />
-            복사한 문구로 폰트 모양 직접 비교하기
-          </span>
-          <span className="text-[10px] text-amber-700">
-            {showVisualCompare ? '접기 ▲' : '열기 ▼'}
-          </span>
-        </button>
-
-        {showVisualCompare && (
-          <div className="mt-2 space-y-2">
-            <div className="grid grid-cols-4 gap-1">
-              {(
-                [
-                  { id: 'serif', label: '명조/바탕' },
-                  { id: 'sans', label: '고딕/돋움' },
-                  { id: 'handwriting', label: '손글씨' },
-                  { id: 'display', label: '장식/특수' },
-                ] as const
-              ).map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setCompareCategory(cat.id)}
-                  className={`rounded-md py-1 text-[10px] font-semibold transition cursor-pointer ${
-                    compareCategory === cat.id
-                      ? 'bg-stone-800 text-white'
-                      : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-100'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="max-h-48 overflow-y-auto space-y-1 pr-0.5">
-              {compareFonts.map((f) => {
-                const isSelected =
-                  currentFamily === f.family || currentFamily.includes(f.name);
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => handleApply(f)}
-                    className={`flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left transition cursor-pointer ${
-                      isSelected
-                        ? 'border-emerald-400 bg-emerald-50/70'
-                        : 'border-stone-200 bg-white hover:bg-stone-50'
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-medium text-stone-400">
-                        {f.name}
-                      </p>
-                      <p
-                        className="truncate text-xs text-stone-900 mt-0.5"
-                        style={{ fontFamily: f.family }}
-                      >
-                        {previewPhrase}
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold ${
-                        isSelected
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-stone-100 text-stone-700'
-                      }`}
-                    >
-                      {isSelected ? '적용됨' : '적용'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Clipboard Permission & Direct Paste Guide Modal */}
       <ClipboardGuideModal

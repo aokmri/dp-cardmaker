@@ -28,6 +28,7 @@ import {
 import { BatchSideStylePanel } from './BatchSideStylePanel';
 import { FontPasteMatcher } from './FontPasteMatcher';
 import { FontSelectDropdown } from './FontSelectDropdown';
+import { applyTextareaClipboardPaste } from '../utils/pasteFormatter';
 
 interface InspectorPanelProps {
   selectedBubble: Bubble | null;
@@ -372,6 +373,13 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       text: e.target.value,
                       html: undefined,
                     })
+                  }
+                  onPaste={(e) =>
+                    applyTextareaClipboardPaste(
+                      e,
+                      selectedBubble.text,
+                      onUpdateBubble
+                    )
                   }
                   style={{ fontFamily: selectedBubble.fontFamily }}
                   className="w-full resize-y rounded-lg border border-stone-200 p-2.5 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"

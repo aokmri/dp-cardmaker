@@ -41,6 +41,7 @@ import {
   getSelectionWithinBubble,
   stripInlineFontFamilyFromHtml,
 } from '../utils/richText';
+import { applyTextareaClipboardPaste } from '../utils/pasteFormatter';
 
 export type MobileToolId =
   | 'batch'
@@ -586,6 +587,13 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                             text: e.target.value,
                             html: undefined,
                           })
+                        }
+                        onPaste={(e) =>
+                          applyTextareaClipboardPaste(
+                            e,
+                            selectedBubble.text,
+                            onUpdateBubble
+                          )
                         }
                         style={{ fontFamily: selectedBubble.fontFamily }}
                         className="w-full rounded-lg border border-stone-200 p-2 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"

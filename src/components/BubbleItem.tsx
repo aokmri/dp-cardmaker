@@ -3,6 +3,7 @@ import { Trash2, Copy, ArrowLeftRight } from 'lucide-react';
 import { Bubble, WebFont } from '../types';
 import { FloatingTextToolbar } from './FloatingTextToolbar';
 import { recordSelection, getSelectionWithinBubble } from '../utils/richText';
+import { buildPasteContentFromClipboard } from '../utils/pasteFormatter';
 
 interface BubbleItemProps {
   bubble: Bubble;
@@ -299,29 +300,20 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     e.preventDefault();
+    const htmlData = e.clipboardData.getData('text/html');
     const plainText = e.clipboardData.getData('text/plain');
-    if (!plainText) return;
+    if (!htmlData && !plainText) return;
+
+    const { fragment, lastNode } = buildPasteContentFromClipboard(
+      htmlData,
+      plainText
+    );
 
     const sel = window.getSelection();
     if (sel && sel.rangeCount > 0) {
       const range = sel.getRangeAt(0);
       range.deleteContents();
-      const lines = plainText.split(/\r?\n/);
-      const frag = document.createDocumentFragment();
-      let lastNode: Node | null = null;
-      lines.forEach((line, idx) => {
-        if (idx > 0) {
-          const br = document.createElement('br');
-          frag.appendChild(br);
-          lastNode = br;
-        }
-        if (line.length > 0) {
-          const textNode = document.createTextNode(line);
-          frag.appendChild(textNode);
-          lastNode = textNode;
-        }
-      });
-      range.insertNode(frag);
+      range.insertNode(fragment);
       if (lastNode) {
         range.setStartAfter(lastNode);
         range.collapse(true);
@@ -331,18 +323,6 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     }
 
     if (textEditableRef.current) {
-      // Strip any foreign inline styles so pasted text adopts this bubble's own style
-      const allStyled = textEditableRef.current.querySelectorAll('*');
-      allStyled.forEach((el) => {
-        if (el instanceof HTMLElement && el.tagName.toLowerCase() !== 'br') {
-          el.removeAttribute('style');
-          if (el.tagName.toLowerCase() === 'font') {
-            el.removeAttribute('face');
-            el.removeAttribute('color');
-            el.removeAttribute('size');
-          }
-        }
-      });
       fitBubbleToWrappedText();
       onUpdate({
         html: textEditableRef.current.innerHTML,
