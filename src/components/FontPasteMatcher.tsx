@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, Check, Sparkles, X, ClipboardPaste, Eye } from 'lucide-react';
+import { Check, Sparkles, X, ClipboardPaste, Eye } from 'lucide-react';
 import { WebFont } from '../types';
 import {
   detectFontsFromClipboard,
@@ -49,7 +49,6 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
   >('unknown');
 
   const richPasteRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const lastPasteTimeRef = useRef<number>(0);
 
   const processClipboardContent = useCallback(
@@ -107,7 +106,6 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
       if (
         activeEl &&
         activeEl !== richPasteRef.current &&
-        activeEl !== searchInputRef.current &&
         (activeEl.tagName === 'INPUT' ||
           activeEl.tagName === 'TEXTAREA' ||
           activeEl.isContentEditable)
@@ -187,30 +185,6 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
     }
   };
 
-  const handleManualSearch = () => {
-    const trimmed = inputValue.trim();
-    if (!trimmed) {
-      setStatusMsg(
-        '복사한 텍스트를 붙여넣거나 찾을 폰트 이름(예: 리디, 고운, 나눔)을 입력해주세요.'
-      );
-      setResults([]);
-      return;
-    }
-    const detected = detectFontsFromClipboard('', trimmed, fonts);
-    setResults(detected);
-    setAppliedFontName(null);
-
-    if (detected.length > 0 && detected.some((d) => d.matchedFont !== null)) {
-      setStatusMsg(`'${trimmed}' 관련 내장 폰트를 찾았습니다!`);
-      setShowVisualCompare(false);
-    } else {
-      setStatusMsg(
-        `'${trimmed}'와(과) 일치하는 내장 폰트를 찾지 못했습니다. 아래에서 모양을 직접 비교해 보세요.`
-      );
-      setShowVisualCompare(true);
-    }
-  };
-
   const handleApply = (font: WebFont) => {
     onApplyFont(font.family, font.name);
     setAppliedFontName(font.name);
@@ -276,33 +250,9 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
           <span>복사한 폰트 불러오기</span>
         </div>
       </div>
-
-      {/* Font Name / Pasted Text Input */}
-      <div className="flex gap-1">
-        <input
-          ref={searchInputRef}
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onPaste={handlePaste}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              handleManualSearch();
-            }
-          }}
-          placeholder="폰트 이름 직접 검색 (예: 리디, 고운, 나눔, 명조)"
-          className="w-full min-w-0 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs text-stone-800 placeholder-stone-400 focus:border-stone-800 focus:outline-none"
-        />
-        <button
-          type="button"
-          onClick={handleManualSearch}
-          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-stone-800 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-stone-700 transition cursor-pointer"
-        >
-          <Search className="h-3 w-3" />
-          <span>찾기</span>
-        </button>
-      </div>
+      <p className="text-[11px] text-stone-500 leading-snug">
+        폰트가 적용된 글을 복사하여 불러오면 폰트의 이름을 알 수 있습니다.
+      </p>
 
       {statusMsg && (
         <div className="flex items-center justify-between gap-2 text-[11px] text-stone-600 leading-snug">

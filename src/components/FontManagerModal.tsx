@@ -7,7 +7,6 @@ import {
   ExternalLink,
   Sparkles,
   Check,
-  Search,
   ClipboardPaste,
   Eye,
 } from 'lucide-react';
@@ -75,7 +74,6 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
   >('unknown');
 
   const richPasteRef = useRef<HTMLDivElement>(null);
-  const detectInputRef = useRef<HTMLTextAreaElement>(null);
   const lastPasteTimeRef = useRef<number>(0);
 
   const runDetection = useCallback(
@@ -130,7 +128,6 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
       if (
         activeEl &&
         activeEl !== richPasteRef.current &&
-        activeEl !== detectInputRef.current &&
         (activeEl.tagName === 'INPUT' ||
           activeEl.tagName === 'TEXTAREA' ||
           activeEl.isContentEditable)
@@ -209,29 +206,6 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
       } catch {
         // Ignore permission error
       }
-    }
-  };
-
-  const handleManualDetectSearch = () => {
-    const trimmed = detectInput.trim();
-    if (!trimmed) {
-      setDetectStatus('복사한 글자를 붙여넣거나 찾을 글꼴 이름을 입력해주세요.');
-      setDetectedCandidates([]);
-      return;
-    }
-    const results = detectFontsFromClipboard('', trimmed, fonts);
-    setDetectedCandidates(results);
-    setAppliedNotice(null);
-
-    const hasBuiltIn = results.some((r) => r.matchedFont !== null);
-    if (hasBuiltIn) {
-      setDetectStatus('일치하는 사이트 내장 글꼴을 찾았습니다! 아래 버튼을 눌러 바로 적용해보세요.');
-      setShowVisualCompare(false);
-    } else {
-      setDetectStatus(
-        `'${trimmed}'와(과) 일치하는 내장 글꼴이 없습니다. 아래에서 글꼴 모양을 직접 비교하거나 구글 검색창에서 검색해보세요.`
-      );
-      setShowVisualCompare(true);
     }
   };
 
@@ -561,38 +535,12 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
                   />
                   <div className="pointer-events-none inset-0 absolute flex items-center justify-center gap-1.5 px-4 text-xs font-semibold text-amber-950">
                     <ClipboardPaste className="h-4 w-4 text-amber-800 shrink-0" />
-                    <span>복사한 글꼴 불러오기</span>
+                    <span>복사한 폰트 불러오기</span>
                   </div>
                 </div>
-
-                <div className="flex items-center justify-between gap-2 pt-1">
-                  <label className="block text-xs font-semibold text-stone-700">
-                    복사한 글자를 붙여넣거나 찾을 폰트 이름을 입력하세요
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleManualDetectSearch}
-                    className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-stone-800 transition cursor-pointer"
-                  >
-                    <Search className="h-3.5 w-3.5" />
-                    <span>글꼴 찾기</span>
-                  </button>
-                </div>
-                <textarea
-                  ref={detectInputRef}
-                  rows={3}
-                  value={detectInput}
-                  onChange={(e) => setDetectInput(e.target.value)}
-                  onPaste={handlePasteDetector}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleManualDetectSearch();
-                    }
-                  }}
-                  placeholder="위 [복사한 글꼴 불러오기]를 누르거나, 여기에 직접 붙여넣기 / 글꼴 이름(예: 리디, 고운, 나눔)을 입력 후 [글꼴 찾기]를 눌러보세요..."
-                  className="w-full rounded-xl border border-stone-200 p-3.5 text-xs text-stone-800 placeholder-stone-400 focus:border-stone-900 focus:outline-none"
-                />
+                <p className="text-xs text-stone-500 leading-snug">
+                  폰트가 적용된 글을 복사하여 불러오면 폰트의 이름을 알 수 있습니다.
+                </p>
 
                 {detectStatus && (
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-600 bg-stone-50 rounded-lg p-2.5">
