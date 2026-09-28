@@ -1,5 +1,16 @@
-import React, { useState } from 'react';
-import { X, Upload, Plus, Trash2, ExternalLink, Sparkles, Check, Search } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import {
+  X,
+  Upload,
+  Plus,
+  Trash2,
+  ExternalLink,
+  Sparkles,
+  Check,
+  Search,
+  ClipboardPaste,
+  Eye,
+} from 'lucide-react';
 import { WebFont } from '../types';
 import {
   loadWebFontFromCss,
@@ -17,6 +28,16 @@ interface FontManagerModalProps {
   onRemoveFont?: (fontId: string) => void;
   onSelectFont: (family: string) => void;
   currentFamily: string;
+}
+
+function extractPlainTextFromHtml(html: string): string {
+  if (!html) return '';
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return (doc.body.textContent || '').trim();
+  } catch {
+    return html.replace(/<[^>]+>/g, ' ').trim();
+  }
 }
 
 export const FontManagerModal: React.FC<FontManagerModalProps> = ({
@@ -37,14 +58,37 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
 
   // Font detector state
   const [detectInput, setDetectInput] = useState('');
+  const [detectSampleText, setDetectSampleText] = useState('');
   const [detectedCandidates, setDetectedCandidates] = useState<DetectedFontCandidate[]>([]);
   const [detectStatus, setDetectStatus] = useState<string>('');
   const [appliedNotice, setAppliedNotice] = useState<string | null>(null);
+  const [showVisualCompare, setShowVisualCompare] = useState(false);
+  const [compareCategory, setCompareCategory] = useState<
+    'serif' | 'sans' | 'handwriting' | 'display'
+  >('serif');
+  const richPasteRef = useRef<HTMLDivElement>(null);
+  const detectInputRef = useRef<HTMLTextAreaElement>(null);
+  const lastPasteTimeRef = useRef<number>(0);
 
   if (!isOpen) return null;
 
   const runDetection = (htmlData: string, plainText: string) => {
-    const results = detectFontsFromClipboard(htmlData, plainText, fonts);
+    const effectiveText = (
+      plainText.trim() || extractPlainTextFromHtml(htmlData)
+    )
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (effectiveText) {
+      setDetectInput(effectiveText);
+      setDetectSampleText(effectiveText.slice(0, 50));
+    }
+
+    const results = detectFontsFromClipboard(
+      htmlData,
+      effectiveText || plainText,
+      fonts
+    );
     setDetectedCandidates(results);
     setAppliedNotice(null);
 
@@ -54,6 +98,7 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
         setDetectStatus(
           `총 ${results.length}개의 글꼴 후보 중 사이트 내장 글꼴 ${builtInMatches.length}개를 찾았습니다! 아래 버튼을 눌러 바로 적용해보세요.`
         );
+        setShowVisualCompare(false);
       } else {
         setDetectStatus(
           `총 ${results.length}개의 글꼴 후보를 발견했으나 사이트 내장 목록에는 없습니다. 아래 구글 검색으로 웹폰트 코드를 찾아 추가해보세요.`
@@ -61,15 +106,96 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
       }
     } else {
       setDetectStatus(
-        '클립보드에 HTML 글꼴 서식이 없거나 일치하는 내장 폰트를 찾지 못했습니다. 아래 구글 검색으로 찾아보세요.'
+        '복사된 텍스트에 글꼴 소스(HTML)가 포함되어 있지 않습니다. 아래에서 글꼴 모양을 직접 비교하거나 구글 검색으로 찾아보세요.'
       );
+      setShowVisualCompare(true);
     }
   };
 
-  const handlePasteDetector = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+  // Unified Clipboard Button handler: immediately populates detectInput and reads HTML font source
+  const handleUnifiedClipboardAction = async () => {
+    if (Date.now() - lastPasteTimeRef.current < 500) return;
+
+    let htmlData = '';
+    let plainText = '';
+
+    // 1. Read plain text immediately so the textbox updates right away
+    if (navigator.clipboard && 'readText' in navigator.clipboard) {
+      try {
+        plainText = await navigator.clipboard.readText();
+        if (plainText.trim()) {
+          const immediateText = plainText.trim();
+          setDetectInput(immediateText);
+          setDetectSampleText(immediateText.replace(/\s+/g, ' ').slice(0, 50));
+        }
+      } catch {
+        // Continue to navigator.clipboard.read()
+      }
+    }
+
+    // 2. Read rich HTML clipboard items for font-family source detection
+    if (navigator.clipboard && 'read' in navigator.clipboard) {
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          if (item.types.includes('text/html')) {
+            const blob = await item.getType('text/html');
+            htmlData += await blob.text();
+          }
+          if (!plainText && item.types.includes('text/plain')) {
+            const blob = await item.getType('text/plain');
+            plainText += await blob.text();
+          }
+        }
+      } catch {
+        // Ignore if read() is blocked
+      }
+    }
+
+    if (htmlData || plainText) {
+      runDetection(htmlData, plainText);
+      detectInputRef.current?.focus();
+      return;
+    }
+
+    detectInputRef.current?.focus();
+    setDetectStatus(
+      '브라우저 보안 설정으로 자동 불러오기가 제한되었습니다. 아래 입력칸에 바로 붙여넣기(Ctrl+V 또는 길게 누르기)를 해주세요.'
+    );
+  };
+
+  const handlePasteDetector = async (e: React.ClipboardEvent<HTMLElement>) => {
+    e.preventDefault();
+    lastPasteTimeRef.current = Date.now();
+
     const htmlData = e.clipboardData.getData('text/html');
     const plainText = e.clipboardData.getData('text/plain');
+
+    if (richPasteRef.current) {
+      richPasteRef.current.innerHTML = '';
+    }
+
+    // Process synchronously right away so the textbox updates in 0ms
     runDetection(htmlData, plainText);
+
+    // If clipboardData had no text/html (e.g. mobile keyboard paste), try async clipboard read in background
+    if (!htmlData && navigator.clipboard && 'read' in navigator.clipboard) {
+      try {
+        let asyncHtml = '';
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          if (item.types.includes('text/html')) {
+            const blob = await item.getType('text/html');
+            asyncHtml += await blob.text();
+          }
+        }
+        if (asyncHtml) {
+          runDetection(asyncHtml, plainText);
+        }
+      } catch {
+        // Ignore permission error
+      }
+    }
   };
 
   const handleManualDetectSearch = () => {
@@ -86,10 +212,12 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
     const hasBuiltIn = results.some((r) => r.matchedFont !== null);
     if (hasBuiltIn) {
       setDetectStatus('일치하는 사이트 내장 글꼴을 찾았습니다! 아래 버튼을 눌러 바로 적용해보세요.');
+      setShowVisualCompare(false);
     } else {
       setDetectStatus(
-        `'${trimmed}'와(과) 일치하는 내장 글꼴이 없습니다. 구글 검색창에서 검색해보세요.`
+        `'${trimmed}'와(과) 일치하는 내장 글꼴이 없습니다. 아래에서 글꼴 모양을 직접 비교하거나 구글 검색창에서 검색해보세요.`
       );
+      setShowVisualCompare(true);
     }
   };
 
@@ -138,6 +266,10 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
       onRemoveFont(fontId);
     }
   };
+
+  const compareFonts = fonts.filter((f) => f.category === compareCategory);
+  const detectPreviewPhrase =
+    detectSampleText || detectInput.trim().slice(0, 50) || previewText;
 
   return (
     <div
@@ -400,11 +532,29 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
 
           {activeTab === 'detect' && (
             <div className="space-y-4">
-              {/* Paste detection box */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
+              {/* Unified Clipboard Button + Paste detection box */}
+              <div className="space-y-2.5">
+                <div className="relative">
+                  <div
+                    ref={richPasteRef}
+                    role="button"
+                    tabIndex={0}
+                    contentEditable
+                    suppressContentEditableWarning
+                    inputMode="none"
+                    onClick={handleUnifiedClipboardAction}
+                    onPaste={handlePasteDetector}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-100/80 px-4 py-2.5 text-xs font-semibold text-amber-950 hover:bg-amber-200/70 focus:border-amber-500 focus:outline-none transition cursor-pointer select-none caret-transparent"
+                  />
+                  <div className="pointer-events-none inset-0 absolute flex items-center justify-center gap-1.5 px-4 text-xs font-semibold text-amber-950">
+                    <ClipboardPaste className="h-4 w-4 text-amber-800 shrink-0" />
+                    <span>복사한 글꼴 불러오기</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-1">
                   <label className="block text-xs font-semibold text-stone-700">
-                    타 사이트에서 복사한 글자를 아래 상자에 붙여넣기(Ctrl+V)하거나 폰트 이름을 입력하세요
+                    복사한 글자를 붙여넣거나 찾을 폰트 이름을 입력하세요
                   </label>
                   <button
                     type="button"
@@ -416,11 +566,18 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
                   </button>
                 </div>
                 <textarea
+                  ref={detectInputRef}
                   rows={3}
                   value={detectInput}
                   onChange={(e) => setDetectInput(e.target.value)}
                   onPaste={handlePasteDetector}
-                  placeholder="타 웹사이트에서 복사한 글자를 여기에 붙여넣거나(Ctrl+V), 찾고 싶은 글꼴 이름을 입력 후 [글꼴 찾기]를 눌러보세요..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleManualDetectSearch();
+                    }
+                  }}
+                  placeholder="위 [복사한 글꼴 불러오기]를 누르거나, 여기에 직접 붙여넣기 / 글꼴 이름(예: 리디, 고운, 나눔)을 입력 후 [글꼴 찾기]를 눌러보세요..."
                   className="w-full rounded-xl border border-stone-200 p-3.5 text-xs text-stone-800 placeholder-stone-400 focus:border-stone-900 focus:outline-none"
                 />
 
@@ -464,7 +621,7 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
 
                         return (
                           <div
-                            key={item.rawName}
+                            key={`${item.rawName}-${matched?.id ?? 'raw'}`}
                             className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-300 bg-white p-3 shadow-2xs"
                           >
                             <div className="min-w-0 space-y-0.5">
@@ -493,7 +650,7 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
                                   className="text-sm text-stone-700 truncate pt-0.5"
                                   style={{ fontFamily: matched.family }}
                                 >
-                                  {previewText}
+                                  {detectPreviewPhrase}
                                 </p>
                               )}
                             </div>
@@ -538,6 +695,97 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
                     </div>
                   </div>
                 )}
+
+                {/* Visual Font Comparison Toggle */}
+                <div className="pt-2 border-t border-stone-200">
+                  <button
+                    type="button"
+                    onClick={() => setShowVisualCompare((prev) => !prev)}
+                    className="flex w-full items-center justify-between text-xs font-semibold text-amber-900 hover:text-amber-950 py-1 cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Eye className="h-4 w-4 text-amber-700" />
+                      복사한 문구로 글꼴 모양 직접 비교하기
+                    </span>
+                    <span className="text-[11px] text-amber-700">
+                      {showVisualCompare ? '접기 ▲' : '열기 ▼'}
+                    </span>
+                  </button>
+
+                  {showVisualCompare && (
+                    <div className="mt-2.5 space-y-2.5">
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {(
+                          [
+                            { id: 'serif', label: '명조/바탕' },
+                            { id: 'sans', label: '고딕/돋움' },
+                            { id: 'handwriting', label: '손글씨' },
+                            { id: 'display', label: '장식/특수' },
+                          ] as const
+                        ).map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => setCompareCategory(cat.id)}
+                            className={`rounded-lg py-1.5 text-xs font-semibold transition cursor-pointer ${
+                              compareCategory === cat.id
+                                ? 'bg-stone-800 text-white'
+                                : 'bg-stone-50 text-stone-600 border border-stone-200 hover:bg-stone-100'
+                            }`}
+                          >
+                            {cat.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="max-h-56 overflow-y-auto grid gap-1.5 sm:grid-cols-2 pr-0.5">
+                        {compareFonts.map((f) => {
+                          const isSelected =
+                            currentFamily === f.family ||
+                            currentFamily.includes(f.name);
+                          return (
+                            <button
+                              key={f.id}
+                              type="button"
+                              onClick={() => {
+                                onSelectFont(f.family);
+                                setAppliedNotice(
+                                  `'${f.name}' 내장 글꼴로 적용되었습니다!`
+                                );
+                              }}
+                              className={`flex items-center justify-between gap-2 rounded-xl border p-2.5 text-left transition cursor-pointer ${
+                                isSelected
+                                  ? 'border-emerald-400 bg-emerald-50/70'
+                                  : 'border-stone-200 bg-white hover:bg-stone-50'
+                              }`}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[11px] font-medium text-stone-400">
+                                  {f.name}
+                                </p>
+                                <p
+                                  className="truncate text-sm text-stone-900 mt-0.5"
+                                  style={{ fontFamily: f.family }}
+                                >
+                                  {detectPreviewPhrase}
+                                </p>
+                              </div>
+                              <span
+                                className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${
+                                  isSelected
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'bg-stone-100 text-stone-700'
+                                }`}
+                              >
+                                {isSelected ? '적용됨' : '적용'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

@@ -526,6 +526,38 @@ const IGNORED_GENERIC_FONTS = new Set([
 ]);
 
 /**
+ * Searches built-in fonts by partial keyword (returns up to 8 matches)
+ */
+export function searchBuiltInFonts(query: string, fonts: WebFont[], limit = 8): WebFont[] {
+  const cleanQuery = normalizeCompactKey(query);
+  const strippedQuery = normalizeCompactKey(stripWeightSuffix(query));
+  if (!cleanQuery) return [];
+
+  const exactMatches: WebFont[] = [];
+  const partialMatches: WebFont[] = [];
+
+  for (const font of fonts) {
+    const keys = getFontSearchKeys(font);
+    if (
+      keys.includes(cleanQuery) ||
+      (strippedQuery.length >= 2 && keys.includes(strippedQuery))
+    ) {
+      exactMatches.push(font);
+    } else if (
+      keys.some(
+        (k) =>
+          k.includes(cleanQuery) ||
+          (cleanQuery.length >= 2 && cleanQuery.includes(k))
+      )
+    ) {
+      partialMatches.push(font);
+    }
+  }
+
+  return [...exactMatches, ...partialMatches].slice(0, limit);
+}
+
+/**
  * Extracts font candidates from clipboard HTML and/or plain text and matches against built-in fonts.
  */
 export function detectFontsFromClipboard(
@@ -535,26 +567,73 @@ export function detectFontsFromClipboard(
 ): DetectedFontCandidate[] {
   const candidates: string[] = [];
   const addCandidate = (raw: string) => {
-    const clean = raw.replace(/['"`]/g, '').replace(/!important/gi, '').trim();
-    if (!clean) return;
-    if (IGNORED_GENERIC_FONTS.has(clean.toLowerCase())) return;
-    if (!candidates.some((c) => c.toLowerCase() === clean.toLowerCase())) {
-      candidates.push(clean);
+    const decoded = raw
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'")
+      .replace(/['"`]/g, '')
+      .replace(/!important/gi, '')
+      .trim();
+    if (!decoded) return;
+    if (IGNORED_GENERIC_FONTS.has(decoded.toLowerCase())) return;
+    if (!candidates.some((c) => c.toLowerCase() === decoded.toLowerCase())) {
+      candidates.push(decoded);
     }
   };
 
   if (htmlData) {
-    const familyRegex = /font-family\s*:\s*([^;}"']+)/gi;
+    const decodedHtml = htmlData
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'");
+
+    // 1. Parse via DOMParser to accurately inspect inline style.fontFamily, face, and class attributes
+    if (typeof DOMParser !== 'undefined') {
+      try {
+        const doc = new DOMParser().parseFromString(htmlData, 'text/html');
+        const elements = doc.querySelectorAll('*');
+        elements.forEach((el) => {
+          const htmlEl = el as HTMLElement;
+          if (htmlEl.style && htmlEl.style.fontFamily) {
+            htmlEl.style.fontFamily.split(',').forEach(addCandidate);
+          }
+          const faceAttr = htmlEl.getAttribute('face');
+          if (faceAttr) {
+            faceAttr.split(',').forEach(addCandidate);
+          }
+          const dataFont =
+            htmlEl.getAttribute('data-font') ||
+            htmlEl.getAttribute('data-font-family');
+          if (dataFont) {
+            dataFont.split(',').forEach(addCandidate);
+          }
+          const className = htmlEl.getAttribute('class');
+          if (className) {
+            className.split(/\s+/).forEach((cls) => {
+              const qlMatch = cls.match(/^(?:ql-font-|font-)(.+)$/i);
+              if (qlMatch && qlMatch[1]) {
+                const matched = matchBuiltInFont(qlMatch[1], fonts);
+                if (matched) addCandidate(matched.name);
+              }
+            });
+          }
+        });
+      } catch {
+        // Ignore DOMParser errors and continue with regex fallback
+      }
+    }
+
+    // 2. Regex fallback (supports quoted font names inside style="font-family: 'Name', ...")
+    const familyRegex = /font-family\s*:\s*([^;<>}]+)/gi;
     let match;
-    while ((match = familyRegex.exec(htmlData)) !== null) {
-      const parts = match[1].split(',');
+    while ((match = familyRegex.exec(decodedHtml)) !== null) {
+      const rawValue = match[1].replace(/["']\s*$/, '');
+      const parts = rawValue.split(',');
       for (const part of parts) {
         addCandidate(part);
       }
     }
 
     const faceAttrRegex = /<font[^>]+face=["']([^"']+)["']/gi;
-    while ((match = faceAttrRegex.exec(htmlData)) !== null) {
+    while ((match = faceAttrRegex.exec(decodedHtml)) !== null) {
       const parts = match[1].split(',');
       for (const part of parts) {
         addCandidate(part);
@@ -577,9 +656,18 @@ export function detectFontsFromClipboard(
       if (fileStem) addCandidate(fileStem);
     }
 
-    // If no HTML font-family was found, or if the user pasted a font name directly
+    // If no HTML font-family was found, check if user typed a keyword or font name
     if (candidates.length === 0 && trimmed.length > 0 && trimmed.length <= 60 && !trimmed.includes('\n')) {
-      addCandidate(trimmed);
+      const multiMatches = searchBuiltInFonts(trimmed, fonts, 6);
+      if (multiMatches.length > 0) {
+        for (const m of multiMatches) {
+          if (!candidates.some((c) => c.toLowerCase() === m.name.toLowerCase())) {
+            candidates.push(m.name);
+          }
+        }
+      } else {
+        addCandidate(trimmed);
+      }
     } else if (candidates.length === 0) {
       // Check if any built-in font name is mentioned in the text
       for (const f of fonts) {
