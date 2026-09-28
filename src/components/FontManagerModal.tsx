@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   X,
   Upload,
@@ -18,7 +18,9 @@ import {
   removeCustomFont,
   detectFontsFromClipboard,
   DetectedFontCandidate,
+  requestClipboardWithPermission,
 } from '../utils/fontLoader';
+import { ClipboardGuideModal } from './ClipboardGuideModal';
 
 interface FontManagerModalProps {
   isOpen: boolean;
@@ -66,102 +68,113 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
   const [compareCategory, setCompareCategory] = useState<
     'serif' | 'sans' | 'handwriting' | 'display'
   >('serif');
+  const [showGuideModal, setShowGuideModal] = useState(false);
+  const [permissionState, setPermissionState] = useState<
+    PermissionState | 'unknown'
+  >('unknown');
+
   const richPasteRef = useRef<HTMLDivElement>(null);
   const detectInputRef = useRef<HTMLTextAreaElement>(null);
   const lastPasteTimeRef = useRef<number>(0);
 
-  if (!isOpen) return null;
+  const runDetection = useCallback(
+    (htmlData: string, plainText: string) => {
+      const effectiveText = (
+        plainText.trim() || extractPlainTextFromHtml(htmlData)
+      )
+        .replace(/\s+/g, ' ')
+        .trim();
 
-  const runDetection = (htmlData: string, plainText: string) => {
-    const effectiveText = (
-      plainText.trim() || extractPlainTextFromHtml(htmlData)
-    )
-      .replace(/\s+/g, ' ')
-      .trim();
+      if (effectiveText) {
+        setDetectInput(effectiveText);
+        setDetectSampleText(effectiveText.slice(0, 50));
+      }
 
-    if (effectiveText) {
-      setDetectInput(effectiveText);
-      setDetectSampleText(effectiveText.slice(0, 50));
-    }
+      const results = detectFontsFromClipboard(
+        htmlData,
+        effectiveText || plainText,
+        fonts
+      );
+      setDetectedCandidates(results);
+      setAppliedNotice(null);
 
-    const results = detectFontsFromClipboard(
-      htmlData,
-      effectiveText || plainText,
-      fonts
-    );
-    setDetectedCandidates(results);
-    setAppliedNotice(null);
-
-    if (results.length > 0) {
-      const builtInMatches = results.filter((r) => r.matchedFont !== null);
-      if (builtInMatches.length > 0) {
-        setDetectStatus(
-          `총 ${results.length}개의 글꼴 후보 중 사이트 내장 글꼴 ${builtInMatches.length}개를 찾았습니다! 아래 버튼을 눌러 바로 적용해보세요.`
-        );
-        setShowVisualCompare(false);
+      if (results.length > 0) {
+        const builtInMatches = results.filter((r) => r.matchedFont !== null);
+        if (builtInMatches.length > 0) {
+          setDetectStatus(
+            `총 ${results.length}개의 글꼴 후보 중 사이트 내장 글꼴 ${builtInMatches.length}개를 찾았습니다! 아래 버튼을 눌러 바로 적용해보세요.`
+          );
+          setShowVisualCompare(false);
+        } else {
+          setDetectStatus(
+            `총 ${results.length}개의 글꼴 후보를 발견했으나 사이트 내장 목록에는 없습니다. 아래 구글 검색으로 웹폰트 코드를 찾아 추가해보세요.`
+          );
+        }
       } else {
         setDetectStatus(
-          `총 ${results.length}개의 글꼴 후보를 발견했으나 사이트 내장 목록에는 없습니다. 아래 구글 검색으로 웹폰트 코드를 찾아 추가해보세요.`
+          '복사된 텍스트에 글꼴 소스(HTML)가 포함되어 있지 않습니다. 아래에서 글꼴 모양을 직접 비교하거나 구글 검색으로 찾아보세요.'
         );
+        setShowVisualCompare(true);
       }
-    } else {
-      setDetectStatus(
-        '복사된 텍스트에 글꼴 소스(HTML)가 포함되어 있지 않습니다. 아래에서 글꼴 모양을 직접 비교하거나 구글 검색으로 찾아보세요.'
-      );
-      setShowVisualCompare(true);
-    }
-  };
+    },
+    [fonts]
+  );
 
-  // Unified Clipboard Button handler: immediately populates detectInput and reads HTML font source
-  const handleUnifiedClipboardAction = async () => {
-    if (Date.now() - lastPasteTimeRef.current < 500) return;
+  // Global paste listener while the modal's 'detect' tab is open: pressing Ctrl+V / Cmd+V anywhere works with 0 security restrictions
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'detect') return;
 
-    let htmlData = '';
-    let plainText = '';
-
-    // 1. Read plain text immediately so the textbox updates right away
-    if (navigator.clipboard && 'readText' in navigator.clipboard) {
-      try {
-        plainText = await navigator.clipboard.readText();
-        if (plainText.trim()) {
-          const immediateText = plainText.trim();
-          setDetectInput(immediateText);
-          setDetectSampleText(immediateText.replace(/\s+/g, ' ').slice(0, 50));
-        }
-      } catch {
-        // Continue to navigator.clipboard.read()
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (
+        activeEl &&
+        activeEl !== richPasteRef.current &&
+        activeEl !== detectInputRef.current &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.isContentEditable)
+      ) {
+        return;
       }
-    }
 
-    // 2. Read rich HTML clipboard items for font-family source detection
-    if (navigator.clipboard && 'read' in navigator.clipboard) {
-      try {
-        const items = await navigator.clipboard.read();
-        for (const item of items) {
-          if (item.types.includes('text/html')) {
-            const blob = await item.getType('text/html');
-            htmlData += await blob.text();
-          }
-          if (!plainText && item.types.includes('text/plain')) {
-            const blob = await item.getType('text/plain');
-            plainText += await blob.text();
-          }
-        }
-      } catch {
-        // Ignore if read() is blocked
+      if (Date.now() - lastPasteTimeRef.current < 200) return;
+      lastPasteTimeRef.current = Date.now();
+
+      const htmlData = e.clipboardData?.getData('text/html') || '';
+      const plainText = e.clipboardData?.getData('text/plain') || '';
+      if (htmlData || plainText) {
+        e.preventDefault();
+        runDetection(htmlData, plainText);
+        setShowGuideModal(false);
       }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, [isOpen, activeTab, runDetection]);
+
+  if (!isOpen) return null;
+
+  // Explicitly request clipboard permission & read content; if denied, open the user guidance modal
+  const handleUnifiedClipboardAction = async (): Promise<boolean> => {
+    if (Date.now() - lastPasteTimeRef.current < 500) return true;
+
+    const res = await requestClipboardWithPermission();
+    setPermissionState(res.permissionState);
+
+    if (res.status === 'ok') {
+      runDetection(res.htmlData, res.plainText);
+      return true;
     }
 
-    if (htmlData || plainText) {
-      runDetection(htmlData, plainText);
-      detectInputRef.current?.focus();
-      return;
+    if (res.status === 'empty') {
+      setDetectStatus('클립보드에 복사된 텍스트가 없습니다. 먼저 텍스트를 복사해 주세요.');
+      return false;
     }
 
-    detectInputRef.current?.focus();
-    setDetectStatus(
-      '브라우저 보안 설정으로 자동 불러오기가 제한되었습니다. 아래 입력칸에 바로 붙여넣기(Ctrl+V 또는 길게 누르기)를 해주세요.'
-    );
+    // Permission denied or blocked by browser security -> open guidance alert modal
+    setShowGuideModal(true);
+    return false;
   };
 
   const handlePasteDetector = async (e: React.ClipboardEvent<HTMLElement>) => {
@@ -542,9 +555,11 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
                     contentEditable
                     suppressContentEditableWarning
                     inputMode="none"
-                    onClick={handleUnifiedClipboardAction}
+                    onClick={() => {
+                      void handleUnifiedClipboardAction();
+                    }}
                     onPaste={handlePasteDetector}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-100/80 px-4 py-2.5 text-xs font-semibold text-amber-950 hover:bg-amber-200/70 focus:border-amber-500 focus:outline-none transition cursor-pointer select-none caret-transparent"
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-100/80 px-4 py-2.5 text-xs font-semibold text-amber-950 hover:bg-amber-200/70 focus:border-amber-500 focus:outline-none transition cursor-pointer caret-transparent"
                   />
                   <div className="pointer-events-none inset-0 absolute flex items-center justify-center gap-1.5 px-4 text-xs font-semibold text-amber-950">
                     <ClipboardPaste className="h-4 w-4 text-amber-800 shrink-0" />
@@ -791,6 +806,17 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* Clipboard Permission & Direct Paste Guide Modal */}
+      <ClipboardGuideModal
+        isOpen={showGuideModal}
+        onClose={() => setShowGuideModal(false)}
+        onPasteReceived={(htmlData, plainText) => {
+          runDetection(htmlData, plainText);
+        }}
+        onRetryPermission={handleUnifiedClipboardAction}
+        permissionState={permissionState}
+      />
     </div>
   );
 };

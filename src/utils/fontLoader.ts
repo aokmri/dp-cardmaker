@@ -525,6 +525,101 @@ const IGNORED_GENERIC_FONTS = new Set([
   '바탕',
 ]);
 
+export interface ClipboardReadResult {
+  status: 'ok' | 'empty' | 'denied';
+  htmlData: string;
+  plainText: string;
+  permissionState: PermissionState | 'unknown';
+}
+
+/**
+ * Explicitly requests clipboard read access and returns HTML + plain text,
+ * or reports permission denial so the UI can show the fallback paste modal.
+ */
+export async function requestClipboardWithPermission(): Promise<ClipboardReadResult> {
+  let htmlData = '';
+  let plainText = '';
+  let permissionDenied = false;
+  let permissionState: PermissionState | 'unknown' = 'unknown';
+
+  // 1. Trigger explicit clipboard read right on the user click gesture (prompts browser permission UI)
+  if (typeof navigator !== 'undefined' && navigator.clipboard && 'read' in navigator.clipboard) {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        if (item.types.includes('text/plain')) {
+          const blob = await item.getType('text/plain');
+          plainText += await blob.text();
+        }
+        if (item.types.includes('text/html')) {
+          const blob = await item.getType('text/html');
+          htmlData += await blob.text();
+        }
+      }
+      if (htmlData || plainText) {
+        return { status: 'ok', htmlData, plainText, permissionState: 'granted' };
+      }
+    } catch (err: unknown) {
+      const errName = err instanceof Error ? err.name : '';
+      if (errName === 'NotAllowedError' || errName === 'SecurityError') {
+        permissionDenied = true;
+      }
+    }
+  }
+
+  // 2. Fallback to readText() if read() wasn't supported or failed
+  if (
+    !htmlData &&
+    !plainText &&
+    typeof navigator !== 'undefined' &&
+    navigator.clipboard &&
+    'readText' in navigator.clipboard
+  ) {
+    try {
+      plainText = await navigator.clipboard.readText();
+      if (plainText) {
+        return { status: 'ok', htmlData: '', plainText, permissionState: 'granted' };
+      }
+    } catch (err: unknown) {
+      const errName = err instanceof Error ? err.name : '';
+      if (errName === 'NotAllowedError' || errName === 'SecurityError') {
+        permissionDenied = true;
+      }
+    }
+  }
+
+  // 3. Query Permissions API for detailed permission state
+  if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
+    try {
+      const status = await navigator.permissions.query({
+        name: 'clipboard-read' as PermissionName,
+      });
+      permissionState = status.state;
+      if (status.state === 'denied') {
+        permissionDenied = true;
+      }
+    } catch {
+      // Some browsers (e.g. Safari/Firefox) do not support querying 'clipboard-read'
+    }
+  }
+
+  if (permissionDenied) {
+    return {
+      status: 'denied',
+      htmlData: '',
+      plainText: '',
+      permissionState: permissionState === 'unknown' ? 'denied' : permissionState,
+    };
+  }
+
+  return {
+    status: htmlData || plainText ? 'ok' : 'empty',
+    htmlData,
+    plainText,
+    permissionState,
+  };
+}
+
 /**
  * Searches built-in fonts by partial keyword (returns up to 8 matches)
  */

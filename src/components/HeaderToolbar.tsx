@@ -6,6 +6,7 @@ import {
   Sparkles,
   Copy,
   RotateCcw,
+  Undo2,
   Check,
   Loader2,
 } from 'lucide-react';
@@ -16,6 +17,8 @@ interface HeaderToolbarProps {
   onOpenImportModal: () => void;
   onOpenFontManager: () => void;
   onResetToSample: () => void;
+  onUndo?: () => void;
+  canUndo?: boolean;
   canvasConfig: CanvasConfig;
   onExportPng: () => Promise<void>;
   onCopyClipboard: () => Promise<void>;
@@ -28,6 +31,8 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
   onOpenImportModal,
   onOpenFontManager,
   onResetToSample,
+  onUndo,
+  canUndo = false,
   canvasConfig,
   onExportPng,
   onCopyClipboard,
@@ -39,7 +44,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
       id="app-header-toolbar"
       className="sticky top-0 z-40 flex h-16 w-full items-center justify-between gap-2 border-b border-stone-200 bg-white/95 px-3 sm:px-6 shadow-xs backdrop-blur-md"
     >
-      {/* Left: Tools and Actions (말풍선 추가, 쪽지 일괄 변환, 외부 글꼴 불러오기, 새로고침) */}
+      {/* Left: Tools and Actions (말풍선 추가, 쪽지 일괄 변환, 외부 글꼴 불러오기, 뒤로가기, 초기화) */}
       <div className="flex items-center gap-1.5 shrink-0">
         <button
           type="button"
@@ -76,6 +81,21 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           <Sparkles className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0 text-amber-700" />
           <span className="hidden sm:inline">폰트목록&amp;추가</span>
         </button>
+
+        {onUndo && (
+          <button
+            type="button"
+            id="btn-undo"
+            onClick={onUndo}
+            disabled={!canUndo}
+            title="뒤로가기 (Ctrl+Z)"
+            aria-label="뒤로가기"
+            className="flex items-center justify-center gap-1 whitespace-nowrap shrink-0 rounded-lg border border-stone-200 bg-white p-2 lg:px-2.5 lg:py-1.5 text-xs font-medium text-stone-700 shadow-2xs hover:bg-stone-50 hover:text-stone-900 disabled:opacity-40 disabled:pointer-events-none transition cursor-pointer"
+          >
+            <Undo2 className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0" />
+            <span className="hidden md:inline">뒤로가기</span>
+          </button>
+        )}
 
         <button
           type="button"

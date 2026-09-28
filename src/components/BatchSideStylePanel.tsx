@@ -237,7 +237,7 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
       {/* 1. Font Family */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold text-stone-700">기본 글꼴 (Font)</label>
+          <label className="text-xs font-semibold text-stone-700">기본 폰트</label>
           <button
             type="button"
             onClick={onOpenFontManager}
@@ -260,7 +260,7 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
           onApplyFont={(family, fontName) => {
             onUpdateSideStyle(activeSide, { fontFamily: family });
             showNotification(
-              `${sideLabel(activeSide)} 서식에 '${fontName}' 글꼴이 적용되었습니다.`
+              `${sideLabel(activeSide)} 서식에 '${fontName}' 폰트가 적용되었습니다.`
             );
           }}
           onOpenFontManager={onOpenFontManager}
@@ -556,6 +556,43 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
       <div className="space-y-3">
         <label className="text-xs font-semibold text-stone-700">말풍선 둥글기 & 여백</label>
 
+        {/* Bubble Tail ON/OFF */}
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-stone-600">말풍선 꼬리 (뾰족 모서리)</span>
+          <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
+            <button
+              type="button"
+              onClick={() =>
+                onUpdateSideStyle(activeSide, {
+                  hasTail: true,
+                })
+              }
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                (currentStyle.hasTail ?? (activeSide !== 'center'))
+                  ? 'bg-stone-900 text-white shadow-sm'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              ON
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onUpdateSideStyle(activeSide, {
+                  hasTail: false,
+                })
+              }
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                !(currentStyle.hasTail ?? (activeSide !== 'center'))
+                  ? 'bg-stone-900 text-white shadow-sm'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              OFF
+            </button>
+          </div>
+        </div>
+
         {/* Border Radius */}
         <div className="flex items-center justify-between text-xs">
           <span className="text-stone-600">모서리 둥글기</span>
@@ -666,6 +703,38 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
             className="h-4 w-4 rounded accent-stone-900"
           />
         </div>
+
+        {/* Bottom Solid Shadow Toggle (4px) */}
+        <div className="flex items-center justify-between text-xs pt-1 border-t border-stone-200/80">
+          <span className="text-stone-600">하단 그림자 (4px 단색)</span>
+          <input
+            type="checkbox"
+            checked={Boolean(currentStyle.hasBottomShadow)}
+            onChange={(e) =>
+              onUpdateSideStyle(activeSide, { hasBottomShadow: e.target.checked })
+            }
+            className="h-4 w-4 rounded accent-stone-900"
+          />
+        </div>
+
+        {currentStyle.hasBottomShadow && (
+          <div className="flex items-center justify-between text-xs pt-1">
+            <span className="text-stone-600">하단 그림자 색상</span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-[10px] text-stone-500">
+                {currentStyle.bottomShadowColor || '#b9a98e'}
+              </span>
+              <input
+                type="color"
+                value={currentStyle.bottomShadowColor || '#b9a98e'}
+                onChange={(e) =>
+                  onUpdateSideStyle(activeSide, { bottomShadowColor: e.target.value })
+                }
+                className="h-6 w-8 cursor-pointer rounded border border-stone-200 p-0.5"
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

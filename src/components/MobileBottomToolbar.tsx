@@ -29,6 +29,7 @@ import {
   Bubble,
   BubbleSideStyle,
   CanvasConfig,
+  CardThemeId,
   DefaultSideStyles,
   WebFont,
 } from '../types';
@@ -77,6 +78,7 @@ interface MobileBottomToolbarProps {
   ) => void;
   activeBatchSide: 'left' | 'center' | 'right';
   onActiveBatchSideChange: (side: 'left' | 'center' | 'right') => void;
+  onApplyTheme?: (themeId: CardThemeId) => void;
 }
 
 export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
@@ -99,6 +101,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
   onCopySideStyle,
   activeBatchSide,
   onActiveBatchSideChange,
+  onApplyTheme,
 }) => {
   const [openTool, setOpenTool] = useState<MobileToolId>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -370,7 +373,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
   }[] = [
     {
       id: 'typography',
-      label: '글꼴·텍스트',
+      label: '폰트·텍스트',
       icon: <Type className="h-4 w-4" />,
     },
     {
@@ -412,7 +415,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
           {/* 1. TYPOGRAPHY & TEXT CONTENT POPOVER */}
           {openTool === 'typography' && (
             <div className="flex flex-col max-h-[42vh]">
-              {renderTargetHeader('글꼴 · 텍스트 설정')}
+              {renderTargetHeader('폰트 · 텍스트 설정')}
               <div className="overflow-y-auto p-3.5 space-y-3">
                 {!isEditingSingle ? (
                   renderBatchSideSelector()
@@ -443,20 +446,22 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                   </div>
                 ) : null}
 
-                {/* Font Selector + External Font Button */}
+                {/* Font Selector */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-semibold text-stone-600">
-                      글꼴 선택
+                      {isEditingSingle ? '폰트' : '기본 폰트'}
                     </span>
-                    <button
-                      type="button"
-                      onClick={onOpenFontManager}
-                      className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-800 hover:underline"
-                    >
-                      <Sparkles className="h-3 w-3" />
-                      외부 글꼴 추가
-                    </button>
+                    {!isEditingSingle && (
+                      <button
+                        type="button"
+                        onClick={onOpenFontManager}
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-800 hover:underline"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        폰트 관리 +
+                      </button>
+                    )}
                   </div>
                   <FontSelectDropdown
                     fonts={fonts}
@@ -718,33 +723,83 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                 </div>
 
                 {/* Border & Shadow Toggles */}
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-stone-100">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleStyleChange({ hasShadow: !activeStyle.hasShadow })
-                    }
-                    className={`rounded-lg border py-1.5 text-xs font-medium transition ${
-                      activeStyle.hasShadow
-                        ? 'border-stone-900 bg-stone-900 text-white'
-                        : 'border-stone-200 bg-white text-stone-600'
-                    }`}
-                  >
-                    그림자 {activeStyle.hasShadow ? '켜짐' : '꺼짐'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleStyleChange({ hasBorder: !activeStyle.hasBorder })
-                    }
-                    className={`rounded-lg border py-1.5 text-xs font-medium transition ${
-                      activeStyle.hasBorder
-                        ? 'border-stone-900 bg-stone-900 text-white'
-                        : 'border-stone-200 bg-white text-stone-600'
-                    }`}
-                  >
-                    외곽선 {activeStyle.hasBorder ? '켜짐' : '꺼짐'}
-                  </button>
+                <div className="space-y-2 pt-2 border-t border-stone-100">
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleStyleChange({ hasBorder: !activeStyle.hasBorder })
+                      }
+                      className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
+                        activeStyle.hasBorder
+                          ? 'border-stone-900 bg-stone-900 text-white'
+                          : 'border-stone-200 bg-white text-stone-600'
+                      }`}
+                    >
+                      외곽선 {activeStyle.hasBorder ? '켜짐' : '꺼짐'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleStyleChange({ hasShadow: !activeStyle.hasShadow })
+                      }
+                      className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
+                        activeStyle.hasShadow
+                          ? 'border-stone-900 bg-stone-900 text-white'
+                          : 'border-stone-200 bg-white text-stone-600'
+                      }`}
+                    >
+                      입체그림자 {activeStyle.hasShadow ? '켜짐' : '꺼짐'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleStyleChange({
+                          hasBottomShadow: !activeStyle.hasBottomShadow,
+                        })
+                      }
+                      className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
+                        activeStyle.hasBottomShadow
+                          ? 'border-stone-900 bg-stone-900 text-white'
+                          : 'border-stone-200 bg-white text-stone-600'
+                      }`}
+                    >
+                      하단그림자 {activeStyle.hasBottomShadow ? '켜짐' : '꺼짐'}
+                    </button>
+                  </div>
+
+                  {(activeStyle.hasBorder || activeStyle.hasBottomShadow) && (
+                    <div className="flex items-center gap-3 pt-1 text-xs">
+                      {activeStyle.hasBorder && (
+                        <label className="flex items-center gap-1.5 text-[11px] text-stone-600">
+                          <span>외곽선 색</span>
+                          <input
+                            type="color"
+                            value={activeStyle.borderColor || '#E5DED3'}
+                            onChange={(e) =>
+                              handleStyleChange({ borderColor: e.target.value })
+                            }
+                            className="h-5 w-7 cursor-pointer rounded border border-stone-200 p-0.5"
+                          />
+                        </label>
+                      )}
+                      {activeStyle.hasBottomShadow && (
+                        <label className="flex items-center gap-1.5 text-[11px] text-stone-600">
+                          <span>하단그림자 색</span>
+                          <input
+                            type="color"
+                            value={activeStyle.bottomShadowColor || '#b9a98e'}
+                            onChange={(e) =>
+                              handleStyleChange({
+                                bottomShadowColor: e.target.value,
+                              })
+                            }
+                            className="h-5 w-7 cursor-pointer rounded border border-stone-200 p-0.5"
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -851,6 +906,43 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                 ) : (
                   renderBatchSideSelector()
                 )}
+
+                {/* Bubble Tail ON/OFF (right before Corner Radius) */}
+                <div className="flex items-center justify-between text-xs pb-1">
+                  <span className="text-[11px] font-semibold text-stone-600">
+                    말풍선 꼬리 (뾰족 모서리)
+                  </span>
+                  <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => handleStyleChange({ hasTail: true })}
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                        (activeStyle.hasTail ??
+                          (isEditingSingle && selectedBubble
+                            ? selectedBubble.align !== 'center'
+                            : activeBatchSide !== 'center'))
+                          ? 'bg-stone-900 text-white shadow-sm'
+                          : 'text-stone-600'
+                      }`}
+                    >
+                      ON
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStyleChange({ hasTail: false })}
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                        !(activeStyle.hasTail ??
+                          (isEditingSingle && selectedBubble
+                            ? selectedBubble.align !== 'center'
+                            : activeBatchSide !== 'center'))
+                          ? 'bg-stone-900 text-white shadow-sm'
+                          : 'text-stone-600'
+                      }`}
+                    >
+                      OFF
+                    </button>
+                  </div>
+                </div>
 
                 {/* Sliders in compact 2-column grid */}
                 <div className="grid grid-cols-2 gap-3">
@@ -1073,6 +1165,58 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
               </div>
 
               <div className="overflow-y-auto p-3.5 space-y-3.5">
+                {/* Card Theme Presets (at very top of Canvas Bg popover) */}
+                {onApplyTheme && (
+                  <div className="space-y-1.5 rounded-xl border border-stone-200 bg-stone-50/70 p-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-stone-800">
+                        카드 테마
+                      </span>
+                      <span className="text-[10px] text-stone-500">
+                        클릭 시 서식 일괄 변경
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onApplyTheme('legacy')}
+                        className="flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-left text-[11px] font-semibold text-stone-800 active:bg-stone-100"
+                      >
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-full border border-stone-300"
+                          style={{ backgroundColor: '#faf9f8' }}
+                        />
+                        <span className="truncate">구버전</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onApplyTheme('default-white')}
+                        className="flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-left text-[11px] font-semibold text-stone-800 active:bg-stone-100"
+                      >
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-full border border-[#6b5843]"
+                          style={{
+                            backgroundColor: '#faf9f8',
+                            boxShadow: '0 2px 0 0 #b9a98e',
+                          }}
+                        />
+                        <span className="truncate">기본 화이트</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onApplyTheme('default-dark')}
+                        className="flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-left text-[11px] font-semibold text-stone-800 active:bg-stone-100"
+                      >
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-full border border-stone-700"
+                          style={{ backgroundColor: '#1b150c' }}
+                        />
+                        <span className="truncate">기본 다크</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* 3x2 Card Bg Grid + Custom Color */}
                 <div className="grid grid-cols-3 gap-1.5">
                   {COLOR_PALETTE.canvasBg.map((bg) => (

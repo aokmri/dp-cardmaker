@@ -1,6 +1,7 @@
 export type BubbleAlignment = 'left' | 'right' | 'center';
 export type TextAlignment = 'left' | 'center' | 'right';
 export type CanvasAspectRatio = 'auto' | 'square' | 'story' | 'wide';
+export type CardThemeId = 'legacy' | 'default-white' | 'default-dark';
 
 export interface Bubble {
   id: string;
@@ -25,11 +26,14 @@ export interface Bubble {
   isUnderline: boolean;
   textAlign: TextAlignment;
   borderRadius: number;
+  hasTail?: boolean; // true: one sharp corner on left/right bubble, false: all 4 corners rounded
   cornerStyle?: 'directional' | 'rounded' | 'sharp-tl' | 'sharp-tr'; // directional: left bubble has sharp TL, right bubble has sharp TR
   fitWidth?: boolean; // wraps text tightly with equal left-right padding
   paddingY: number;
   paddingX: number;
   hasShadow: boolean;
+  hasBottomShadow?: boolean; // 4px solid (non-blurred) bottom shadow
+  bottomShadowColor?: string;
   hasBorder: boolean;
   borderColor?: string;
   letterSpacing?: number;
@@ -48,9 +52,12 @@ export const SIDE_STYLE_KEYS: (keyof BubbleSideStyle)[] = [
   'isUnderline',
   'textAlign',
   'borderRadius',
+  'hasTail',
   'paddingY',
   'paddingX',
   'hasShadow',
+  'hasBottomShadow',
+  'bottomShadowColor',
   'hasBorder',
   'borderColor',
   'letterSpacing',
@@ -68,9 +75,12 @@ export interface BubbleSideStyle {
   isUnderline: boolean;
   textAlign: TextAlignment;
   borderRadius: number;
+  hasTail?: boolean;
   paddingY: number;
   paddingX: number;
   hasShadow: boolean;
+  hasBottomShadow?: boolean;
+  bottomShadowColor?: string;
   hasBorder: boolean;
   borderColor?: string;
   letterSpacing?: number;

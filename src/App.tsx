@@ -4,6 +4,7 @@ import {
   Bubble,
   BubbleSideStyle,
   CanvasConfig,
+  CardThemeId,
   DefaultSideStyles,
   SIDE_STYLE_KEYS,
   WebFont,
@@ -80,6 +81,71 @@ export default function App() {
   // Current working/live-editing side styles
   const [defaultSideStyles, setDefaultSideStyles] = useState<DefaultSideStyles>(loadSavedSideStyles);
 
+  // Undo History Stack
+  const [historyStack, setHistoryStack] = useState<
+    {
+      bubbles: Bubble[];
+      canvasConfig: CanvasConfig;
+      defaultSideStyles: DefaultSideStyles;
+    }[]
+  >([]);
+  const lastPushTimeRef = useRef<number>(0);
+
+  const recordHistory = (coalesce = false) => {
+    const now = Date.now();
+    if (coalesce && now - lastPushTimeRef.current < 450) {
+      lastPushTimeRef.current = now;
+      return;
+    }
+    lastPushTimeRef.current = now;
+    const snapshot = {
+      bubbles: bubbles.map((b) => ({
+        ...b,
+        customStyleKeys: b.customStyleKeys ? [...b.customStyleKeys] : undefined,
+      })),
+      canvasConfig: { ...canvasConfig },
+      defaultSideStyles: {
+        left: { ...defaultSideStyles.left },
+        center: { ...defaultSideStyles.center },
+        right: { ...defaultSideStyles.right },
+      },
+    };
+    setHistoryStack((prev) => [...prev.slice(-39), snapshot]);
+  };
+
+  const handleUndo = () => {
+    setHistoryStack((prev) => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      setBubbles(last.bubbles);
+      setCanvasConfig(last.canvasConfig);
+      setDefaultSideStyles(last.defaultSideStyles);
+      lastPushTimeRef.current = 0;
+      return prev.slice(0, -1);
+    });
+  };
+
+  // Global Ctrl+Z / Cmd+Z shortcut for Undo
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+        const activeEl = document.activeElement as HTMLElement | null;
+        if (
+          activeEl &&
+          (activeEl.tagName === 'INPUT' ||
+            activeEl.tagName === 'TEXTAREA' ||
+            activeEl.isContentEditable)
+        ) {
+          return;
+        }
+        e.preventDefault();
+        handleUndo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const stagePointerDownInsideBubbleRef = useRef<boolean>(false);
 
@@ -125,6 +191,7 @@ export default function App() {
 
   // Add a new speech bubble using side default style
   const handleAddBubble = (forcedAlign?: 'left' | 'right' | 'center') => {
+    recordHistory(false);
     const lastBubble = bubbles[bubbles.length - 1];
     const newY = lastBubble ? lastBubble.y + 100 : 100;
     const nextAlign = forcedAlign || (lastBubble?.align === 'left' ? 'right' : 'left');
@@ -147,10 +214,13 @@ export default function App() {
       isUnderline: sideStyle.isUnderline,
       textAlign: sideStyle.textAlign,
       borderRadius: sideStyle.borderRadius,
+      hasTail: sideStyle.hasTail,
       cornerStyle: 'directional',
       paddingY: sideStyle.paddingY,
       paddingX: sideStyle.paddingX,
       hasShadow: sideStyle.hasShadow,
+      hasBottomShadow: sideStyle.hasBottomShadow,
+      bottomShadowColor: sideStyle.bottomShadowColor,
       hasBorder: sideStyle.hasBorder,
       borderColor: sideStyle.borderColor,
       letterSpacing: sideStyle.letterSpacing,
@@ -187,6 +257,7 @@ export default function App() {
     side: 'left' | 'right' | 'center',
     updated: Partial<BubbleSideStyle>
   ) => {
+    recordHistory(true);
     setDefaultSideStyles((prev) => {
       const nextStyle = { ...prev[side], ...updated };
       const nextState = { ...prev, [side]: nextStyle };
@@ -223,6 +294,7 @@ export default function App() {
   // Revert the current side style to the previously saved default
   // and immediately restore the bubbles on this side on the canvas
   const handleRevertSideStyle = (side: 'left' | 'right' | 'center') => {
+    recordHistory(false);
     const original = savedSideStyles[side];
     setDefaultSideStyles((prev) => ({
       ...prev,
@@ -244,6 +316,7 @@ export default function App() {
     fromSide: 'left' | 'right' | 'center',
     toSide: 'left' | 'right' | 'center'
   ) => {
+    recordHistory(false);
     const copied = { ...defaultSideStyles[fromSide] };
     setDefaultSideStyles((prev) => ({
       ...prev,
@@ -262,6 +335,7 @@ export default function App() {
   //   automatically switch to the target position's default style (defaultSideStyles[newAlign]).
   // - When editing style properties in Individual Edit (개별편집), those keys are recorded in customStyleKeys.
   const handleUpdateBubble = (id: string, updated: Partial<Bubble>) => {
+    recordHistory(true);
     setBubbles((prev) =>
       prev.map((b) => {
         if (b.id !== id) return b;
@@ -326,6 +400,7 @@ export default function App() {
 
   // Delete bubble
   const handleDeleteBubble = (id: string) => {
+    recordHistory(false);
     setBubbles((prev) => prev.filter((b) => b.id !== id));
     if (selectedBubbleId === id) {
       handleSelectBubble(null);
@@ -334,6 +409,7 @@ export default function App() {
 
   // Duplicate bubble
   const handleDuplicateBubble = (id: string) => {
+    recordHistory(false);
     const targetIndex = bubbles.findIndex((b) => b.id === id);
     if (targetIndex === -1) return;
     const target = bubbles[targetIndex];
@@ -361,6 +437,7 @@ export default function App() {
     targetAlign: 'left' | 'right' | 'center',
     isCopy: boolean
   ) => {
+    recordHistory(false);
     const sourceIdx = bubbles.findIndex((b) => b.id === bubbleId);
     if (sourceIdx === -1) return;
     const sourceBubble = bubbles[sourceIdx];
@@ -410,6 +487,7 @@ export default function App() {
 
   // Bulk import
   const handleImportBubbles = (newBubbles: Bubble[], mode: 'replace' | 'append') => {
+    recordHistory(false);
     if (mode === 'replace') {
       setBubbles(newBubbles);
     } else {
@@ -422,11 +500,161 @@ export default function App() {
 
   // Reset to initial sample without window.confirm (iframe-safe)
   const handleResetToSample = () => {
+    recordHistory(false);
     setDefaultSideStyles(INITIAL_SIDE_STYLES);
     setSavedSideStyles(INITIAL_SIDE_STYLES);
     setBubbles(INITIAL_BUBBLES);
     setCanvasConfig(INITIAL_CANVAS_CONFIG);
     setSelectedBubbleId(null);
+  };
+
+  // Apply a Card Theme preset (구버전 / 기본 화이트 / 기본 다크)
+  const handleApplyTheme = (themeId: CardThemeId) => {
+    recordHistory(false);
+
+    let leftPatch: Partial<BubbleSideStyle>;
+    let rightPatch: Partial<BubbleSideStyle>;
+    let centerPatch: Partial<BubbleSideStyle>;
+    let canvasBgColor: string;
+    let canvasPaperTexture: CanvasConfig['paperTexture'];
+
+    if (themeId === 'legacy') {
+      // 1. 구버전 : 현재 기본 테마 (미세 한지 결)
+      leftPatch = {
+        bgColor: '#FBF8F1',
+        hasBorder: true,
+        borderColor: '#E5DED3',
+        hasShadow: true,
+        hasBottomShadow: false,
+        bottomShadowColor: '#b9a98e',
+        hasTail: true,
+      };
+      rightPatch = {
+        bgColor: '#FBF5E6',
+        hasBorder: true,
+        borderColor: '#E5DED3',
+        hasShadow: true,
+        hasBottomShadow: false,
+        bottomShadowColor: '#b9a98e',
+        hasTail: true,
+      };
+      centerPatch = {
+        color: '#34312F',
+        bgColor: 'transparent',
+        hasBorder: false,
+        hasShadow: false,
+        hasBottomShadow: false,
+        hasTail: false,
+      };
+      canvasBgColor = '#faf9f8';
+      canvasPaperTexture = 'paper';
+    } else if (themeId === 'default-white') {
+      // 2. 기본 화이트 : 말풍선색 faf9f8, 말풍선 외곽선 색 6b5843, 하단그림자 색 b9a98e, 말풍선 꼬리 off, 배경지 색 faf9f8, 매끄러운 일반지
+      leftPatch = {
+        bgColor: '#faf9f8',
+        hasBorder: true,
+        borderColor: '#6b5843',
+        hasShadow: false,
+        hasBottomShadow: true,
+        bottomShadowColor: '#b9a98e',
+        hasTail: false,
+      };
+      rightPatch = {
+        bgColor: '#faf9f8',
+        hasBorder: true,
+        borderColor: '#6b5843',
+        hasShadow: false,
+        hasBottomShadow: true,
+        bottomShadowColor: '#b9a98e',
+        hasTail: false,
+      };
+      centerPatch = {
+        color: '#34312F',
+        bgColor: 'transparent',
+        hasBorder: false,
+        hasShadow: false,
+        hasBottomShadow: false,
+        hasTail: false,
+      };
+      canvasBgColor = '#faf9f8';
+      canvasPaperTexture = 'none';
+    } else {
+      // 3. 기본 다크 : 왼쪽 말풍선색 d1ab67, 오른쪽 말풍선 색 ddc9a1, 그림자, 외곽선 없음, 말풍선 꼬리 off, 배경지 색 1b150c, 매끄러운 일반지, 중앙 글씨 색 하얀색
+      leftPatch = {
+        bgColor: '#d1ab67',
+        hasBorder: false,
+        hasShadow: false,
+        hasBottomShadow: false,
+        hasTail: false,
+      };
+      rightPatch = {
+        bgColor: '#ddc9a1',
+        hasBorder: false,
+        hasShadow: false,
+        hasBottomShadow: false,
+        hasTail: false,
+      };
+      centerPatch = {
+        color: '#FFFFFF',
+        bgColor: 'transparent',
+        hasBorder: false,
+        hasShadow: false,
+        hasBottomShadow: false,
+        hasTail: false,
+      };
+      canvasBgColor = '#1b150c';
+      canvasPaperTexture = 'none';
+    }
+
+    const themeKeys: (keyof BubbleSideStyle)[] = [
+      'bgColor',
+      'hasBorder',
+      'borderColor',
+      'hasShadow',
+      'hasBottomShadow',
+      'bottomShadowColor',
+      'hasTail',
+    ];
+
+    setDefaultSideStyles((prev) => ({
+      left: { ...prev.left, ...leftPatch },
+      center: { ...prev.center, ...centerPatch },
+      right: { ...prev.right, ...rightPatch },
+    }));
+
+    setBubbles((prevBubbles) =>
+      prevBubbles.map((b) => {
+        const patch =
+          b.align === 'left'
+            ? leftPatch
+            : b.align === 'right'
+            ? rightPatch
+            : centerPatch;
+        const keysToClear =
+          b.align === 'center' ? [...themeKeys, 'color' as const] : themeKeys;
+        const filteredCustomKeys = (b.customStyleKeys || []).filter(
+          (k) => !keysToClear.includes(k)
+        );
+        return {
+          ...b,
+          ...patch,
+          customStyleKeys: filteredCustomKeys,
+        };
+      })
+    );
+
+    setCanvasConfig((prev) => ({
+      ...prev,
+      bgColor: canvasBgColor,
+      bgImageUrl: '',
+      paperTexture: canvasPaperTexture,
+    }));
+  };
+
+  // Update canvas config with undo tracking
+  const handleUpdateCanvasConfig = (updated: Partial<CanvasConfig>) => {
+    recordHistory(true);
+    setCanvasConfig((prev) => ({ ...prev, ...updated }));
   };
 
   // Toggle layout mode
@@ -534,6 +762,7 @@ export default function App() {
   // Move selected bubble up or down in the list
   const handleMoveBubbleOrder = (direction: 'up' | 'down') => {
     if (!selectedBubbleId) return;
+    recordHistory(false);
     setBubbles((prev) => {
       const idx = prev.findIndex((b) => b.id === selectedBubbleId);
       if (idx === -1) return prev;
@@ -554,6 +783,8 @@ export default function App() {
         onOpenImportModal={() => setIsImportModalOpen(true)}
         onOpenFontManager={() => setIsFontModalOpen(true)}
         onResetToSample={handleResetToSample}
+        onUndo={handleUndo}
+        canUndo={historyStack.length > 0}
         canvasConfig={canvasConfig}
         onExportPng={handleExportPng}
         onCopyClipboard={handleCopyClipboard}
@@ -655,9 +886,7 @@ export default function App() {
             if (selectedBubbleId) handleDuplicateBubble(selectedBubbleId);
           }}
           canvasConfig={canvasConfig}
-          onUpdateCanvasConfig={(updated) =>
-            setCanvasConfig((prev) => ({ ...prev, ...updated }))
-          }
+          onUpdateCanvasConfig={handleUpdateCanvasConfig}
           fonts={fonts}
           onOpenFontManager={() => setIsFontModalOpen(true)}
           defaultSideStyles={defaultSideStyles}
@@ -668,6 +897,7 @@ export default function App() {
           onCopySideStyle={handleCopySideStyle}
           onSelectBubbleById={handleSelectBubble}
           onActiveBatchSideChange={setActiveBatchSide}
+          onApplyTheme={handleApplyTheme}
         />
 
         {/* Samsung Notes-style Bottom Icon Bar & Popover (Mobile < md) */}
@@ -689,9 +919,7 @@ export default function App() {
           onMoveBubbleOrder={handleMoveBubbleOrder}
           onAddBubble={handleAddBubble}
           canvasConfig={canvasConfig}
-          onUpdateCanvasConfig={(updated) =>
-            setCanvasConfig((prev) => ({ ...prev, ...updated }))
-          }
+          onUpdateCanvasConfig={handleUpdateCanvasConfig}
           fonts={fonts}
           onOpenFontManager={() => setIsFontModalOpen(true)}
           defaultSideStyles={defaultSideStyles}
@@ -702,6 +930,7 @@ export default function App() {
           onCopySideStyle={handleCopySideStyle}
           activeBatchSide={activeBatchSide}
           onActiveBatchSideChange={setActiveBatchSide}
+          onApplyTheme={handleApplyTheme}
         />
       </div>
 

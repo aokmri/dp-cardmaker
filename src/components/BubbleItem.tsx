@@ -364,19 +364,30 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     });
   };
 
-  // Fixed corner rule as requested:
-  // Left: Top-left sharp (0px), others rounded
-  // Right: Top-right sharp (0px), others rounded
-  // Center: All 4 rounded
+  // Corner rule:
+  // When hasTail is on: Left has Top-left sharp (0px), Right has Top-right sharp (0px)
+  // When hasTail is off: All 4 corners rounded
   const getBorderRadius = () => {
-    const r = bubble.borderRadius || 14;
-    if (bubble.align === 'left') {
-      return `0px ${r}px ${r}px ${r}px`;
-    } else if (bubble.align === 'right') {
-      return `${r}px 0px ${r}px ${r}px`;
-    } else {
+    const r = bubble.borderRadius ?? 14;
+    const hasTail = bubble.hasTail !== undefined ? bubble.hasTail : bubble.align !== 'center';
+    if (!hasTail) {
       return `${r}px ${r}px ${r}px ${r}px`;
     }
+    if (bubble.align === 'right') {
+      return `${r}px 0px ${r}px ${r}px`;
+    }
+    return `0px ${r}px ${r}px ${r}px`;
+  };
+
+  const getBoxShadow = () => {
+    const shadows: string[] = [];
+    if (bubble.hasBottomShadow) {
+      shadows.push(`0 4px 0 0 ${bubble.bottomShadowColor || '#b9a98e'}`);
+    }
+    if (bubble.hasShadow) {
+      shadows.push('0 4px 14px -2px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.03)');
+    }
+    return shadows.length > 0 ? shadows.join(', ') : 'none';
   };
 
   // Fixed max-width limit to 95%
@@ -413,9 +424,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     paddingBottom: `${bubble.paddingY}px`,
     paddingLeft: `${bubble.paddingX}px`,
     paddingRight: `${bubble.paddingX}px`,
-    boxShadow: bubble.hasShadow
-      ? '0 4px 14px -2px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.03)'
-      : 'none',
+    boxShadow: getBoxShadow(),
     border: bubble.hasBorder
       ? `1px solid ${bubble.borderColor || '#E5DED3'}`
       : 'none',

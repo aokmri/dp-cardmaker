@@ -18,7 +18,7 @@ import {
   Image as ImageIcon,
   RotateCcw,
 } from 'lucide-react';
-import { Bubble, BubbleSideStyle, CanvasConfig, DefaultSideStyles, WebFont } from '../types';
+import { Bubble, BubbleSideStyle, CanvasConfig, CardThemeId, DefaultSideStyles, WebFont } from '../types';
 import { COLOR_PALETTE } from '../data/presetFonts';
 import {
   formatSelection,
@@ -49,6 +49,7 @@ interface InspectorPanelProps {
   activeTab?: 'batch' | 'single' | 'canvas';
   onTabChange?: (tab: 'batch' | 'single' | 'canvas') => void;
   onActiveBatchSideChange?: (side: 'left' | 'center' | 'right') => void;
+  onApplyTheme?: (themeId: CardThemeId) => void;
 }
 
 export const InspectorPanel: React.FC<InspectorPanelProps> = ({
@@ -71,6 +72,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   activeTab: controlledActiveTab,
   onTabChange,
   onActiveBatchSideChange,
+  onApplyTheme,
 }) => {
   const [internalActiveTab, setInternalActiveTab] = useState<'batch' | 'single' | 'canvas'>('batch');
   const activeTab = controlledActiveTab !== undefined ? controlledActiveTab : internalActiveTab;
@@ -224,7 +226,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
       ...(cleanedHtml !== undefined ? { html: cleanedHtml } : {}),
       customStyleKeys: nextCustomKeys,
     });
-    setSaveSuccessMsg('기본 글꼴로 초기화되었습니다.');
+    setSaveSuccessMsg('기본 폰트로 초기화되었습니다.');
     setTimeout(() => setSaveSuccessMsg(null), 2000);
   };
 
@@ -377,27 +379,19 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 />
               </div>
 
-              {/* 2. Font Selector with "기본글꼴로 초기화" & "외부 글꼴 추가" Buttons */}
+              {/* 2. Font Selector with "기본폰트로 초기화" Button */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-1">
-                  <label className="text-xs font-semibold text-stone-600">글꼴 (폰트)</label>
+                  <label className="text-xs font-semibold text-stone-600">폰트</label>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={handleResetFontToDefault}
                       className="flex items-center gap-1 rounded border border-stone-200 bg-stone-50 px-1.5 py-0.5 text-[11px] font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
-                      title="현재 위치의 기본 글꼴로 초기화"
+                      title="현재 위치의 기본 폰트로 초기화"
                     >
                       <RotateCcw className="h-3 w-3" />
-                      기본글꼴로 초기화
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onOpenFontManager}
-                      className="flex items-center gap-1 text-[11px] font-medium text-amber-800 hover:underline cursor-pointer"
-                    >
-                      <Sparkles className="h-3 w-3" />
-                      외부 글꼴 추가
+                      기본폰트로 초기화
                     </button>
                   </div>
                 </div>
@@ -413,7 +407,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   currentFamily={selectedBubble.fontFamily}
                   onApplyFont={(family, fontName) => {
                     handleFontFamily(family);
-                    setSaveSuccessMsg(`선택한 말풍선에 '${fontName}' 글꼴이 적용되었습니다.`);
+                    setSaveSuccessMsg(`선택한 말풍선에 '${fontName}' 폰트가 적용되었습니다.`);
                     setTimeout(() => setSaveSuccessMsg(null), 2000);
                   }}
                   onOpenFontManager={onOpenFontManager}
@@ -734,6 +728,174 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 </div>
               </div>
 
+              {/* 7. Corner Radius & Padding */}
+              <div className="space-y-3 pt-2 border-t border-stone-100">
+                <label className="text-xs font-semibold text-stone-700">말풍선 둥글기 & 여백</label>
+
+                {/* Bubble Tail ON/OFF */}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-stone-600">말풍선 꼬리 (뾰족 모서리)</span>
+                  <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => onUpdateBubble({ hasTail: true })}
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                        (selectedBubble.hasTail ?? (selectedBubble.align !== 'center'))
+                          ? 'bg-stone-900 text-white shadow-sm'
+                          : 'text-stone-600 hover:text-stone-900'
+                      }`}
+                    >
+                      ON
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateBubble({ hasTail: false })}
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                        !(selectedBubble.hasTail ?? (selectedBubble.align !== 'center'))
+                          ? 'bg-stone-900 text-white shadow-sm'
+                          : 'text-stone-600 hover:text-stone-900'
+                      }`}
+                    >
+                      OFF
+                    </button>
+                  </div>
+                </div>
+
+                {/* Border Radius */}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-stone-600">모서리 둥글기</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min="4"
+                      max="32"
+                      value={selectedBubble.borderRadius}
+                      onChange={(e) =>
+                        onUpdateBubble({ borderRadius: Number(e.target.value) })
+                      }
+                      className="w-28 accent-stone-900"
+                    />
+                    <span className="w-8 text-right font-mono text-xs">
+                      {selectedBubble.borderRadius}px
+                    </span>
+                  </div>
+                </div>
+
+                {/* Padding Y */}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-stone-600">상하 내부 여백</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min="8"
+                      max="36"
+                      value={selectedBubble.paddingY}
+                      onChange={(e) =>
+                        onUpdateBubble({ paddingY: Number(e.target.value) })
+                      }
+                      className="w-28 accent-stone-900"
+                    />
+                    <span className="w-8 text-right font-mono text-xs">
+                      {selectedBubble.paddingY}px
+                    </span>
+                  </div>
+                </div>
+
+                {/* Padding X */}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-stone-600">좌우 내부 여백</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min="12"
+                      max="48"
+                      value={selectedBubble.paddingX}
+                      onChange={(e) =>
+                        onUpdateBubble({ paddingX: Number(e.target.value) })
+                      }
+                      className="w-28 accent-stone-900"
+                    />
+                    <span className="w-8 text-right font-mono text-xs">
+                      {selectedBubble.paddingX}px
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 7.5 Border & Shadow */}
+              <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50/50 p-3">
+                <label className="text-xs font-semibold text-stone-700">외곽 테두리 & 그림자</label>
+
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-stone-600">외곽 테두리선</span>
+                  <input
+                    type="checkbox"
+                    checked={selectedBubble.hasBorder}
+                    onChange={(e) =>
+                      onUpdateBubble({ hasBorder: e.target.checked })
+                    }
+                    className="h-4 w-4 rounded accent-stone-900"
+                  />
+                </div>
+
+                {selectedBubble.hasBorder && (
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-stone-200/80">
+                    <span className="text-stone-600">테두리 색상</span>
+                    <input
+                      type="color"
+                      value={selectedBubble.borderColor || '#E5DED3'}
+                      onChange={(e) =>
+                        onUpdateBubble({ borderColor: e.target.value })
+                      }
+                      className="h-6 w-8 cursor-pointer rounded border border-stone-200 p-0.5"
+                    />
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <span className="text-stone-600">은은한 입체 그림자</span>
+                  <input
+                    type="checkbox"
+                    checked={selectedBubble.hasShadow}
+                    onChange={(e) =>
+                      onUpdateBubble({ hasShadow: e.target.checked })
+                    }
+                    className="h-4 w-4 rounded accent-stone-900"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-stone-200/80">
+                  <span className="text-stone-600">하단 그림자 (4px 단색)</span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(selectedBubble.hasBottomShadow)}
+                    onChange={(e) =>
+                      onUpdateBubble({ hasBottomShadow: e.target.checked })
+                    }
+                    className="h-4 w-4 rounded accent-stone-900"
+                  />
+                </div>
+
+                {selectedBubble.hasBottomShadow && (
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    <span className="text-stone-600">하단 그림자 색상</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[10px] text-stone-500">
+                        {selectedBubble.bottomShadowColor || '#b9a98e'}
+                      </span>
+                      <input
+                        type="color"
+                        value={selectedBubble.bottomShadowColor || '#b9a98e'}
+                        onChange={(e) =>
+                          onUpdateBubble({ bottomShadowColor: e.target.value })
+                        }
+                        className="h-6 w-8 cursor-pointer rounded border border-stone-200 p-0.5"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* 8. Speaker Name */}
               <div className="space-y-1.5 pt-2 border-t border-stone-100">
                 <label className="text-xs font-semibold text-stone-600">화자 이름 (선택)</label>
@@ -795,6 +957,82 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         ) : (
           /* Canvas Global Settings */
           <div className="space-y-6">
+            {/* Card Theme Presets (at very top of Canvas tab) */}
+            {onApplyTheme && (
+              <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50/70 p-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-stone-800">카드 테마</label>
+                  <span className="text-[10px] text-stone-500">클릭 시 서식 일괄 변경</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onApplyTheme('legacy')}
+                    className="flex flex-col items-start gap-1.5 rounded-lg border border-stone-200 bg-white p-2 text-left transition hover:border-stone-400 hover:shadow-xs cursor-pointer"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span
+                        className="h-3.5 w-3.5 rounded-full border border-stone-300"
+                        style={{ backgroundColor: '#faf9f8' }}
+                      />
+                      <span
+                        className="h-3.5 w-3.5 rounded-full border border-[#E5DED3]"
+                        style={{ backgroundColor: '#FBF8F1' }}
+                      />
+                      <span
+                        className="h-3.5 w-3.5 rounded-full border border-[#E5DED3]"
+                        style={{ backgroundColor: '#FBF5E6' }}
+                      />
+                    </div>
+                    <span className="text-[11px] font-semibold text-stone-800">구버전</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onApplyTheme('default-white')}
+                    className="flex flex-col items-start gap-1.5 rounded-lg border border-stone-200 bg-white p-2 text-left transition hover:border-stone-400 hover:shadow-xs cursor-pointer"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span
+                        className="h-3.5 w-3.5 rounded-full border border-stone-300"
+                        style={{ backgroundColor: '#faf9f8' }}
+                      />
+                      <span
+                        className="h-3.5 w-3.5 rounded-full border border-[#6b5843]"
+                        style={{
+                          backgroundColor: '#faf9f8',
+                          boxShadow: '0 2px 0 0 #b9a98e',
+                        }}
+                      />
+                    </div>
+                    <span className="text-[11px] font-semibold text-stone-800">기본 화이트</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onApplyTheme('default-dark')}
+                    className="flex flex-col items-start gap-1.5 rounded-lg border border-stone-200 bg-white p-2 text-left transition hover:border-stone-400 hover:shadow-xs cursor-pointer"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span
+                        className="h-3.5 w-3.5 rounded-full border border-stone-700"
+                        style={{ backgroundColor: '#1b150c' }}
+                      />
+                      <span
+                        className="h-3.5 w-3.5 rounded-full border border-stone-400"
+                        style={{ backgroundColor: '#d1ab67' }}
+                      />
+                      <span
+                        className="h-3.5 w-3.5 rounded-full border border-stone-400"
+                        style={{ backgroundColor: '#ddc9a1' }}
+                      />
+                    </div>
+                    <span className="text-[11px] font-semibold text-stone-800">기본 다크</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Card Background Color */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-stone-700">카드 배경색</label>

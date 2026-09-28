@@ -69,7 +69,7 @@ export const FontSelectDropdown: React.FC<FontSelectDropdownProps> = ({
           className="truncate text-sm text-stone-900"
           style={{ fontFamily: selectedFont?.family || value }}
         >
-          {selectedFont ? selectedFont.name : '글꼴 선택'}
+          {selectedFont ? selectedFont.name : '폰트 선택'}
           {selectedFont?.isCustom ? ' ★' : ''}
         </span>
         <ChevronDown
@@ -89,7 +89,7 @@ export const FontSelectDropdown: React.FC<FontSelectDropdownProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="글꼴 이름 검색..."
+              placeholder="폰트 이름 검색..."
               className="w-full bg-transparent text-xs text-stone-800 placeholder-stone-400 focus:outline-none"
             />
             {searchQuery && (
@@ -110,7 +110,7 @@ export const FontSelectDropdown: React.FC<FontSelectDropdownProps> = ({
           <div className="overflow-y-auto p-1">
             {filteredFonts.length === 0 ? (
               <div className="py-4 text-center text-xs text-stone-400">
-                일치하는 글꼴이 없습니다.
+                일치하는 폰트가 없습니다.
               </div>
             ) : (
               filteredFonts.map((f) => {
