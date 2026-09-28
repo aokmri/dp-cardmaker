@@ -1,5 +1,5 @@
 {
-  "name": "Text Dialogue Card Maker",
+  "name": "이체통 출력소",
   "description": "텍스트를 말풍선 카드로 정리하여 고화질 PNG 저장을 지원하는 도구",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
