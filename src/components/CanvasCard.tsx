@@ -1,6 +1,7 @@
 import React, { forwardRef, useState, useRef, useEffect, useCallback } from 'react';
 import { Bubble, CanvasConfig, WebFont } from '../types';
 import { getColorLuminance } from '../data/presetFonts';
+import { useRasterizedPaperTexture } from '../utils/paperTexture';
 import { BubbleItem } from './BubbleItem';
 
 interface CanvasCardProps {
@@ -201,44 +202,10 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
       ? Math.min(1, Math.max(0.25, (threshold - bgLuminance + 10) / Math.max(15, threshold)))
       : 0;
 
-    // Fixed texture intensities per preset:
-    // 미세 한지 결: 15% (어두운 배경 5%), 빈티지 질감: 5%, 구겨진 종이: 5%, 원고지 모눈: 25%
-    const intensity =
-      config.paperTexture === 'paper'
-        ? isDarkBg
-          ? 0.05
-          : 0.15
-        : config.paperTexture === 'grain'
-        ? 0.05
-        : config.paperTexture === 'crumpled'
-        ? 0.05
-        : config.paperTexture === 'grid'
-        ? 0.25
-        : 0.15;
-
-    // 1A. Light-bg Hanji SVG data URI (mulberry fibers + high-contrast dark pulp relief)
-    const hanjiSvgDataUri = `url("data:image/svg+xml,%3Csvg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='hanjiPulp'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.04 0.22' numOctaves='3' seed='4' stitchTiles='stitch' result='fibers'/%3E%3CfeColorMatrix in='fibers' type='matrix' values='0 0 0 0 0.28  0 0 0 0 0.21  0 0 0 0 0.14  2.4 -0.9 0 -0.42 0' result='fiberAlpha'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' seed='11' stitchTiles='stitch' result='finePulp'/%3E%3CfeColorMatrix in='finePulp' type='matrix' values='0 0 0 0 0.24  0 0 0 0 0.18  0 0 0 0 0.12  2.1 -0.7 0 -0.45 0' result='pulpAlpha'/%3E%3CfeMerge%3E%3CfeMergeNode in='fiberAlpha'/%3E%3CfeMergeNode in='pulpAlpha'/%3E%3C/feMerge%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23hanjiPulp)' opacity='0.72'/%3E%3Cg stroke='%23594532' stroke-linecap='round' fill='none' opacity='0.55'%3E%3Cpath d='M12 28 Q34 22 58 31' stroke-width='0.7'/%3E%3Cpath d='M140 18 Q168 29 195 21' stroke-width='0.55'/%3E%3Cpath d='M78 64 Q96 52 122 60' stroke-width='0.65'/%3E%3Cpath d='M22 112 Q55 124 84 115' stroke-width='0.5'/%3E%3Cpath d='M154 95 Q182 82 214 98' stroke-width='0.75'/%3E%3Cpath d='M45 170 Q72 158 104 172' stroke-width='0.6'/%3E%3Cpath d='M132 156 Q165 172 198 160' stroke-width='0.55'/%3E%3Cpath d='M18 216 Q48 205 76 220' stroke-width='0.65'/%3E%3Cpath d='M162 212 Q192 226 225 210' stroke-width='0.6'/%3E%3Cpath d='M95 14 Q108 42 98 68' stroke-width='0.45'/%3E%3Cpath d='M208 42 Q194 74 212 102' stroke-width='0.5'/%3E%3Cpath d='M62 128 Q48 156 66 184' stroke-width='0.45'/%3E%3C/g%3E%3Cg fill='%234A3828' opacity='0.45'%3E%3Ccircle cx='42' cy='48' r='0.9'/%3E%3Ccircle cx='184' cy='56' r='1.1'/%3E%3Ccircle cx='118' cy='104' r='0.8'/%3E%3Ccircle cx='28' cy='154' r='1.0'/%3E%3Ccircle cx='168' cy='138' r='0.85'/%3E%3Ccircle cx='92' cy='198' r='1.1'/%3E%3Ccircle cx='215' cy='186' r='0.75'/%3E%3C/g%3E%3C/svg%3E")`;
-
-    // 1B. Dark-bg Hanji SVG data URI (silver-ivory mulberry fibers & luminous pulp relief for dark/black paper)
-    const hanjiDarkSvgDataUri = `url("data:image/svg+xml,%3Csvg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='hanjiPulpDark'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.04 0.22' numOctaves='3' seed='4' stitchTiles='stitch' result='fibers'/%3E%3CfeColorMatrix in='fibers' type='matrix' values='0 0 0 0 0.88  0 0 0 0 0.83  0 0 0 0 0.75  2.2 -0.8 0 -0.45 0' result='fiberAlpha'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' seed='11' stitchTiles='stitch' result='finePulp'/%3E%3CfeColorMatrix in='finePulp' type='matrix' values='0 0 0 0 0.82  0 0 0 0 0.77  0 0 0 0 0.68  1.9 -0.65 0 -0.48 0' result='pulpAlpha'/%3E%3CfeMerge%3E%3CfeMergeNode in='fiberAlpha'/%3E%3CfeMergeNode in='pulpAlpha'/%3E%3C/feMerge%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23hanjiPulpDark)' opacity='0.68'/%3E%3Cg stroke='%23EAE0D0' stroke-linecap='round' fill='none' opacity='0.65'%3E%3Cpath d='M12 28 Q34 22 58 31' stroke-width='0.75'/%3E%3Cpath d='M140 18 Q168 29 195 21' stroke-width='0.6'/%3E%3Cpath d='M78 64 Q96 52 122 60' stroke-width='0.7'/%3E%3Cpath d='M22 112 Q55 124 84 115' stroke-width='0.55'/%3E%3Cpath d='M154 95 Q182 82 214 98' stroke-width='0.8'/%3E%3Cpath d='M45 170 Q72 158 104 172' stroke-width='0.65'/%3E%3Cpath d='M132 156 Q165 172 198 160' stroke-width='0.6'/%3E%3Cpath d='M18 216 Q48 205 76 220' stroke-width='0.7'/%3E%3Cpath d='M162 212 Q192 226 225 210' stroke-width='0.65'/%3E%3Cpath d='M95 14 Q108 42 98 68' stroke-width='0.5'/%3E%3Cpath d='M208 42 Q194 74 212 102' stroke-width='0.55'/%3E%3Cpath d='M62 128 Q48 156 66 184' stroke-width='0.5'/%3E%3C/g%3E%3Cg fill='%23DFD3C0' opacity='0.55'%3E%3Ccircle cx='42' cy='48' r='0.95'/%3E%3Ccircle cx='184' cy='56' r='1.15'/%3E%3Ccircle cx='118' cy='104' r='0.85'/%3E%3Ccircle cx='28' cy='154' r='1.05'/%3E%3Ccircle cx='168' cy='138' r='0.9'/%3E%3Ccircle cx='92' cy='198' r='1.15'/%3E%3Ccircle cx='215' cy='186' r='0.8'/%3E%3C/g%3E%3C/svg%3E")`;
-
-    // 2A. Light-bg Vintage Grain SVG data URI
-    const vintageGrainSvgDataUri = `url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='vintagePaper'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.035' numOctaves='4' seed='9' stitchTiles='stitch' result='mottle'/%3E%3CfeColorMatrix in='mottle' type='matrix' values='0 0 0 0 0.34  0 0 0 0 0.24  0 0 0 0 0.14  2.5 -0.8 0 -0.48 0' result='mottleAlpha'/%3E%3CfeTurbulence type='turbulence' baseFrequency='0.82' numOctaves='4' seed='23' stitchTiles='stitch' result='coarseGrain'/%3E%3CfeColorMatrix in='coarseGrain' type='matrix' values='0 0 0 0 0.22  0 0 0 0 0.16  0 0 0 0 0.09  2.8 -1.0 0 -0.52 0' result='grainAlpha'/%3E%3CfeMerge%3E%3CfeMergeNode in='mottleAlpha'/%3E%3CfeMergeNode in='grainAlpha'/%3E%3C/feMerge%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23vintagePaper)' opacity='0.88'/%3E%3Cg fill='%233E2C1C' opacity='0.55'%3E%3Ccircle cx='34' cy='26' r='1.2'/%3E%3Ccircle cx='156' cy='42' r='0.95'/%3E%3Ccircle cx='88' cy='78' r='1.35'/%3E%3Ccircle cx='192' cy='118' r='1.1'/%3E%3Ccircle cx='46' cy='142' r='1.25'/%3E%3Ccircle cx='124' cy='176' r='1.0'/%3E%3Ccircle cx='178' cy='198' r='1.3'/%3E%3Ccircle cx='22' cy='202' r='0.9'/%3E%3C/g%3E%3C/svg%3E")`;
-
-    // 2B. Dark-bg Vintage Grain SVG data URI (weathered antique dust + warm sepia-ivory mottling for dark backgrounds)
-    const vintageGrainDarkSvgDataUri = `url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='vintagePaperDark'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.035' numOctaves='4' seed='9' stitchTiles='stitch' result='mottle'/%3E%3CfeColorMatrix in='mottle' type='matrix' values='0 0 0 0 0.84  0 0 0 0 0.76  0 0 0 0 0.64  2.3 -0.75 0 -0.48 0' result='mottleAlpha'/%3E%3CfeTurbulence type='turbulence' baseFrequency='0.82' numOctaves='4' seed='23' stitchTiles='stitch' result='coarseGrain'/%3E%3CfeColorMatrix in='coarseGrain' type='matrix' values='0 0 0 0 0.90  0 0 0 0 0.84  0 0 0 0 0.74  2.6 -0.95 0 -0.52 0' result='grainAlpha'/%3E%3CfeMerge%3E%3CfeMergeNode in='mottleAlpha'/%3E%3CfeMergeNode in='grainAlpha'/%3E%3C/feMerge%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23vintagePaperDark)' opacity='0.82'/%3E%3Cg fill='%23E8DCCB' opacity='0.6'%3E%3Ccircle cx='34' cy='26' r='1.2'/%3E%3Ccircle cx='156' cy='42' r='0.95'/%3E%3Ccircle cx='88' cy='78' r='1.35'/%3E%3Ccircle cx='192' cy='118' r='1.1'/%3E%3Ccircle cx='46' cy='142' r='1.25'/%3E%3Ccircle cx='124' cy='176' r='1.0'/%3E%3Ccircle cx='178' cy='198' r='1.3'/%3E%3Ccircle cx='22' cy='202' r='0.9'/%3E%3C/g%3E%3C/svg%3E")`;
-
-    // 3A. Light-bg 3D Crumpled Paper SVG data URI (pure organic multi-scale crinkle relief, no straight lines)
-    const crumpledPaperSvgDataUri = `url("data:image/svg+xml,%3Csvg viewBox='0 0 360 360' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='crumpleRelief' x='0%25' y='0%25' width='100%25' height='100%25'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.015 0.018' numOctaves='5' seed='19' stitchTiles='stitch' result='macroCrumple'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.048' numOctaves='4' seed='7' stitchTiles='stitch' result='microWrinkle'/%3E%3CfeDisplacementMap in='macroCrumple' in2='microWrinkle' scale='16' xChannelSelector='R' yChannelSelector='G' result='warpedCrumple'/%3E%3CfeDiffuseLighting in='warpedCrumple' lighting-color='%23ffffff' surfaceScale='9.5' diffuseConstant='1.05' result='litFacets'%3E%3CfeDistantLight azimuth='135' elevation='38'/%3E%3C/feDiffuseLighting%3E%3CfeColorMatrix in='litFacets' type='matrix' values='0.33 0.33 0.33 0 0  0.31 0.31 0.31 0 0  0.28 0.28 0.28 0 0  0 0 0 1 0' result='warmShadow'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23crumpleRelief)'/%3E%3C/svg%3E")`;
-
-    // 3B. Fine secondary crinkle detail layer (organic micro-folds & paper grain)
-    const crumpledMicroSvgDataUri = `url("data:image/svg+xml,%3Csvg viewBox='0 0 260 260' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='crumpleMicro' x='0%25' y='0%25' width='100%25' height='100%25'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.036' numOctaves='4' seed='31' stitchTiles='stitch' result='fineFolds'/%3E%3CfeDiffuseLighting in='fineFolds' lighting-color='%23ffffff' surfaceScale='5.5' diffuseConstant='1.1' result='fineLit'%3E%3CfeDistantLight azimuth='315' elevation='44'/%3E%3C/feDiffuseLighting%3E%3CfeColorMatrix in='fineLit' type='matrix' values='0.33 0.33 0.33 0 0  0.31 0.31 0.31 0 0  0.28 0.28 0.28 0 0  0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23crumpleMicro)'/%3E%3C/svg%3E")`;
-
-    // 3C. Dark-bg 3D Crumpled Paper SVG data URI (pure organic specular fold highlights for dark/black paper)
-    const crumpledPaperDarkSvgDataUri = `url("data:image/svg+xml,%3Csvg viewBox='0 0 360 360' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='crumpleReliefDark' x='0%25' y='0%25' width='100%25' height='100%25'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.015 0.018' numOctaves='5' seed='19' stitchTiles='stitch' result='macroCrumple'/%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.048' numOctaves='4' seed='7' stitchTiles='stitch' result='microWrinkle'/%3E%3CfeDisplacementMap in='macroCrumple' in2='microWrinkle' scale='16' xChannelSelector='R' yChannelSelector='G' result='warpedCrumple'/%3E%3CfeDiffuseLighting in='warpedCrumple' lighting-color='%23f5efe6' surfaceScale='10' diffuseConstant='0.95' result='litFacets'%3E%3CfeDistantLight azimuth='135' elevation='25'/%3E%3C/feDiffuseLighting%3E%3CfeColorMatrix in='litFacets' type='matrix' values='0 0 0 0 0.88  0 0 0 0 0.84  0 0 0 0 0.78  1.5 0 0 -0.58 0' result='highlightAlpha'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23crumpleReliefDark)' opacity='0.88'/%3E%3C/svg%3E")`;
-
-    // 3D. Dark-bg fine secondary crinkle detail layer
-    const crumpledMicroDarkSvgDataUri = `url("data:image/svg+xml,%3Csvg viewBox='0 0 260 260' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='crumpleMicroDark' x='0%25' y='0%25' width='100%25' height='100%25'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.036' numOctaves='4' seed='31' stitchTiles='stitch' result='fineFolds'/%3E%3CfeDiffuseLighting in='fineFolds' lighting-color='%23efe6d8' surfaceScale='6.5' diffuseConstant='0.95' result='fineLit'%3E%3CfeDistantLight azimuth='315' elevation='28'/%3E%3C/feDiffuseLighting%3E%3CfeColorMatrix in='fineLit' type='matrix' values='0 0 0 0 0.85  0 0 0 0 0.80  0 0 0 0 0.73  1.35 0 0 -0.56 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23crumpleMicroDark)' opacity='0.78'/%3E%3C/svg%3E")`;
+    const textureLayer = useRasterizedPaperTexture(
+      config.bgColor,
+      config.paperTexture
+    );
 
     return (
       <div
@@ -272,6 +239,7 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
           paddingRight: `${config.paddingX}px`,
           paddingTop: `${config.paddingY}px`,
           paddingBottom: `${config.paddingY}px`,
+          isolation: 'isolate',
         }}
         className="relative flex flex-col justify-between overflow-hidden shadow-xl transition-all select-none"
       >
@@ -294,121 +262,29 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
           />
         )}
 
-        {/* 1. 미세 한지 결 (선명한 전통 한지 닥섬유 결 + 발 무늬 질감) */}
-        {config.paperTexture === 'paper' && (
-          <>
-            <div
-              className={`pointer-events-none absolute inset-0 ${
-                isDarkBg ? 'mix-blend-screen' : 'mix-blend-multiply'
-              }`}
-              style={{
-                opacity: isDarkBg
-                  ? Math.min(0.95, Math.max(0.08, intensity * (0.56 + darkDepth * 0.28)))
-                  : Math.min(0.95, Math.max(0.04, intensity * 0.68)),
-                backgroundImage: isDarkBg ? hanjiDarkSvgDataUri : hanjiSvgDataUri,
-                backgroundSize: '220px 220px',
-              }}
-            />
-            <div
-              className={`pointer-events-none absolute inset-0 ${
-                isDarkBg ? 'mix-blend-screen' : 'mix-blend-multiply'
-              }`}
-              style={{
-                opacity: isDarkBg
-                  ? Math.min(0.55, Math.max(0.04, intensity * (0.24 + darkDepth * 0.14)))
-                  : Math.min(0.45, Math.max(0.02, intensity * 0.22)),
-                backgroundImage: isDarkBg
-                  ? `
-                  repeating-linear-gradient(0deg, rgba(232, 222, 206, 0.16) 0px, rgba(232, 222, 206, 0.16) 1px, transparent 1px, transparent 4px),
-                  repeating-linear-gradient(90deg, rgba(232, 222, 206, 0.10) 0px, rgba(232, 222, 206, 0.10) 1px, transparent 1px, transparent 18px)
-                `
-                  : `
-                  repeating-linear-gradient(0deg, rgba(90, 70, 48, 0.14) 0px, rgba(90, 70, 48, 0.14) 1px, transparent 1px, transparent 4px),
-                  repeating-linear-gradient(90deg, rgba(90, 70, 48, 0.08) 0px, rgba(90, 70, 48, 0.08) 1px, transparent 1px, transparent 18px)
-                `,
-              }}
-            />
-          </>
-        )}
-
-        {/* 2. 원고지 모눈 (점자/모눈 효과 + 강도 조절 연동) */}
-        {config.paperTexture === 'grid' && (
-          <div
-            className={`pointer-events-none absolute inset-0 ${
-              isDarkBg ? 'mix-blend-screen' : 'mix-blend-multiply'
-            }`}
-            style={{
-              opacity: isDarkBg
-                ? Math.min(0.65, Math.max(0.04, intensity * (0.28 + darkDepth * 0.18)))
-                : Math.min(0.35, Math.max(0.015, intensity * 0.18)),
-              backgroundImage: isDarkBg
-                ? `radial-gradient(#E8DFD1 0.9px, transparent 0.9px)`
-                : `radial-gradient(#2C2520 0.85px, transparent 0.85px)`,
-              backgroundSize: '8px 8px',
-            }}
-          />
-        )}
-
-        {/* 3. 빈티지 질감 (고서 양피지 입자 + 에이징 얼룩 & 비네팅 효과) */}
-        {config.paperTexture === 'grain' && (
-          <>
-            <div
-              className={`pointer-events-none absolute inset-0 ${
-                isDarkBg ? 'mix-blend-screen' : 'mix-blend-multiply'
-              }`}
-              style={{
-                opacity: isDarkBg
-                  ? Math.min(0.95, Math.max(0.08, intensity * (0.62 + darkDepth * 0.26)))
-                  : Math.min(0.95, Math.max(0.05, intensity * 0.76)),
-                backgroundImage: isDarkBg ? vintageGrainDarkSvgDataUri : vintageGrainSvgDataUri,
-                backgroundSize: '200px 200px',
-              }}
-            />
-            <div
-              className={`pointer-events-none absolute inset-0 ${
-                isDarkBg ? 'mix-blend-screen' : 'mix-blend-multiply'
-              }`}
-              style={{
-                opacity: isDarkBg
-                  ? Math.min(0.75, Math.max(0.05, intensity * (0.38 + darkDepth * 0.2)))
-                  : Math.min(0.85, Math.max(0.04, intensity * 0.55)),
-                backgroundImage: isDarkBg
-                  ? `radial-gradient(ellipse at center, rgba(224, 206, 178, 0.14) 0%, transparent 55%, rgba(214, 194, 166, 0.24) 100%)`
-                  : `radial-gradient(ellipse at center, transparent 35%, rgba(102, 73, 42, 0.28) 100%)`,
-              }}
-            />
-          </>
-        )}
-
-        {/* 4. 구겨진 종이 (자연스러운 구김 요철 + 미세 주름 음영 효과) */}
-        {config.paperTexture === 'crumpled' && (
-          <>
-            <div
-              className={`pointer-events-none absolute inset-0 ${
-                isDarkBg ? 'mix-blend-screen' : 'mix-blend-multiply'
-              }`}
-              style={{
-                opacity: isDarkBg
-                  ? Math.min(0.95, Math.max(0.08, intensity * (0.58 + darkDepth * 0.28)))
-                  : Math.min(0.92, Math.max(0.06, intensity * 0.65)),
-                backgroundImage: isDarkBg ? crumpledPaperDarkSvgDataUri : crumpledPaperSvgDataUri,
-                backgroundSize: '360px 360px',
-              }}
-            />
-            <div
-              className={`pointer-events-none absolute inset-0 ${
-                isDarkBg ? 'mix-blend-screen' : 'mix-blend-multiply'
-              }`}
-              style={{
-                opacity: isDarkBg
-                  ? Math.min(0.75, Math.max(0.04, intensity * (0.34 + darkDepth * 0.18)))
-                  : Math.min(0.65, Math.max(0.03, intensity * 0.36)),
-                backgroundImage: isDarkBg ? crumpledMicroDarkSvgDataUri : crumpledMicroSvgDataUri,
-                backgroundSize: '240px 240px',
-              }}
-            />
-          </>
-        )}
+        {/* 1~4. 종이 질감 효과 (한지 결 / 원고지 모눈 / 빈티지 질감 / 구겨진 종이) — PNG 타일로 래스터화하여 저장·복사 시 100% 동일 출력 */}
+        {config.paperTexture !== 'none' &&
+          config.paperTexture !== 'custom' &&
+          textureLayer.tileDataUrl && (
+            <>
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  backgroundImage: `url("${textureLayer.tileDataUrl}")`,
+                  backgroundRepeat: 'repeat',
+                  backgroundSize: textureLayer.backgroundSize,
+                }}
+              />
+              {textureLayer.vignetteCss && (
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    backgroundImage: textureLayer.vignetteCss,
+                  }}
+                />
+              )}
+            </>
+          )}
 
         {/* 5. 사용자 지정 직접 가져온 텍스처 (이미지 파일 또는 URL) */}
         {config.paperTexture === 'custom' && config.customTextureUrl && (
@@ -447,7 +323,14 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
           {/* Top Decorative Section */}
           <div className="relative w-full">
             {config.showHeader && config.headerText && (
-              <div className="mb-3 text-center text-xs font-serif tracking-widest text-stone-500">
+              <div
+                className="mb-3 text-xs tracking-widest whitespace-pre-wrap"
+                style={{
+                  fontFamily: config.headerFontFamily || "'Noto Serif KR', serif",
+                  color: config.headerColor || '#78716c',
+                  textAlign: config.headerAlign || 'center',
+                }}
+              >
                 {config.headerText}
               </div>
             )}
@@ -627,7 +510,14 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
             )}
 
             {config.showFooter && config.footerText && (
-              <div className="mt-3 text-center text-xs font-serif tracking-widest text-stone-500">
+              <div
+                className="mt-3 text-xs tracking-widest whitespace-pre-wrap"
+                style={{
+                  fontFamily: config.footerFontFamily || "'Noto Serif KR', serif",
+                  color: config.footerColor || '#78716c',
+                  textAlign: config.footerAlign || 'center',
+                }}
+              >
                 {config.footerText}
               </div>
             )}

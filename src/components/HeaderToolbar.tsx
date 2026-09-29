@@ -112,11 +112,17 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
         <button
           type="button"
           id="btn-copy-clipboard"
-          onClick={onCopyClipboard}
-          disabled={isExporting}
+          onClick={() => {
+            if (!isExporting) {
+              onCopyClipboard();
+            }
+          }}
+          aria-disabled={isExporting}
           title={copiedSuccess ? '복사 완료!' : '클립보드 복사'}
           aria-label={copiedSuccess ? '복사 완료!' : '클립보드 복사'}
-          className="flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 rounded-lg border border-stone-200 bg-white p-2 lg:px-3 lg:py-1.5 text-xs font-medium text-stone-700 shadow-2xs hover:bg-stone-50 hover:text-stone-900 disabled:opacity-50 transition"
+          className={`flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 rounded-lg border border-stone-200 bg-white p-2 lg:px-3 lg:py-1.5 text-xs font-medium text-stone-700 shadow-2xs hover:bg-stone-50 hover:text-stone-900 transition ${
+            isExporting ? 'opacity-50 pointer-events-none' : 'cursor-pointer'
+          }`}
         >
           {copiedSuccess ? (
             <>

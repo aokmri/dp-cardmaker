@@ -16,6 +16,7 @@ import {
   INITIAL_CANVAS_CONFIG,
   INITIAL_SIDE_STYLES,
 } from './data/presetFonts';
+import { generateRasterizedTextureTile } from './utils/paperTexture';
 import {
   getStoredCustomFonts,
   getSafeFontEmbedCSS,
@@ -731,10 +732,14 @@ export default function App() {
     setSelectedBubbleId(null);
 
     try {
-      // Ensure web fonts are completely ready before rendering
+      // Ensure web fonts and rasterized paper texture are completely ready before rendering
       if (document.fonts?.ready) {
         await document.fonts.ready;
       }
+      await generateRasterizedTextureTile(
+        canvasConfig.bgColor,
+        canvasConfig.paperTexture
+      );
 
       // Small delay to ensure state and unselected borders have cleared
       await new Promise((resolve) => setTimeout(resolve, 80));
@@ -764,20 +769,33 @@ export default function App() {
 
   // Copy to clipboard
   const handleCopyClipboard = async () => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || isExporting) return;
+    const targetNode = canvasRef.current;
+
+    // Ensure the document/window has focus before invoking Clipboard API
+    try {
+      window.focus();
+    } catch {
+      // ignore
+    }
+
     setIsExporting(true);
     setSelectedBubbleId(null);
 
-    try {
+    const createBlobPromise = async (): Promise<Blob> => {
       if (document.fonts?.ready) {
         await document.fonts.ready;
       }
+      await generateRasterizedTextureTile(
+        canvasConfig.bgColor,
+        canvasConfig.paperTexture
+      );
 
       await new Promise((resolve) => setTimeout(resolve, 80));
 
-      const fontEmbedCSS = await getSafeFontEmbedCSS(canvasRef.current);
+      const fontEmbedCSS = await getSafeFontEmbedCSS(targetNode);
 
-      const blob = await toBlob(canvasRef.current, {
+      const generated = await toBlob(targetNode, {
         quality: 0.98,
         pixelRatio: 2.0,
         fontEmbedCSS,
@@ -786,17 +804,35 @@ export default function App() {
           !(node instanceof HTMLIFrameElement),
       });
 
-      if (!blob) throw new Error('Blob generation failed');
+      if (!generated) {
+        throw new Error('Blob generation failed');
+      }
+      return generated;
+    };
 
+    try {
       if (navigator.clipboard && window.ClipboardItem) {
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'image/png': blob }),
-        ]);
+        try {
+          // Pass Promise<Blob> directly into ClipboardItem synchronously during the click gesture
+          // so transient user activation and document focus are preserved.
+          const item = new ClipboardItem({
+            'image/png': createBlobPromise(),
+          });
+          await navigator.clipboard.write([item]);
+        } catch {
+          // Fallback for browsers that require a resolved Blob instead of Promise<Blob>
+          const resolvedBlob = await createBlobPromise();
+          window.focus();
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': resolvedBlob }),
+          ]);
+        }
         setCopiedSuccess(true);
         setTimeout(() => setCopiedSuccess(false), 2500);
       }
-    } catch (err) {
-      console.error('Clipboard copy failed', err);
+    } catch {
+      // If clipboard write is blocked because the document lost focus (e.g., user clicked outside the iframe),
+      // avoid throwing an unhandled console error.
     } finally {
       setIsExporting(false);
     }

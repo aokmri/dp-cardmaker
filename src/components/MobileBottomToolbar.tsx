@@ -1713,10 +1713,10 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                 </div>
 
                 {/* Header / Footer toggles */}
-                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-stone-100">
-                  <div className="space-y-1">
-                    <label className="flex items-center justify-between text-[11px] font-semibold text-stone-600">
-                      <span>상단 머리말</span>
+                <div className="space-y-2.5 pt-1 border-t border-stone-100">
+                  <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50/70 p-2.5">
+                    <label className="flex items-center justify-between text-xs font-semibold text-stone-700 cursor-pointer">
+                      <span>상단 머릿말</span>
                       <input
                         type="checkbox"
                         checked={canvasConfig.showHeader}
@@ -1727,21 +1727,83 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                       />
                     </label>
                     {canvasConfig.showHeader && (
-                      <input
-                        type="text"
-                        value={canvasConfig.headerText}
-                        onChange={(e) =>
-                          onUpdateCanvasConfig({ headerText: e.target.value })
-                        }
-                        placeholder="머리말 입력"
-                        className="w-full rounded border border-stone-200 px-2 py-1 text-xs"
-                      />
+                      <div className="space-y-2 pt-1.5 border-t border-stone-200/80">
+                        <input
+                          type="text"
+                          value={canvasConfig.headerText}
+                          onChange={(e) =>
+                            onUpdateCanvasConfig({ headerText: e.target.value })
+                          }
+                          placeholder="상단 머릿말 입력"
+                          className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs"
+                        />
+                        <FontSelectDropdown
+                          fonts={fonts}
+                          value={
+                            canvasConfig.headerFontFamily ||
+                            "'Noto Serif KR', serif"
+                          }
+                          onChange={(headerFontFamily) =>
+                            onUpdateCanvasConfig({ headerFontFamily })
+                          }
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] text-stone-700">
+                            <span>색상</span>
+                            <input
+                              type="color"
+                              value={
+                                canvasConfig.headerColor &&
+                                canvasConfig.headerColor.startsWith('#') &&
+                                canvasConfig.headerColor.length === 7
+                                  ? canvasConfig.headerColor
+                                  : '#78716c'
+                              }
+                              onChange={(e) =>
+                                onUpdateCanvasConfig({
+                                  headerColor: e.target.value,
+                                })
+                              }
+                              className="h-4 w-4 cursor-pointer rounded border border-stone-300 bg-transparent p-0"
+                            />
+                          </label>
+                          <div className="flex rounded-lg border border-stone-200 bg-white p-0.5">
+                            {(['left', 'center', 'right'] as const).map(
+                              (align) => (
+                                <button
+                                  key={align}
+                                  type="button"
+                                  onClick={() =>
+                                    onUpdateCanvasConfig({ headerAlign: align })
+                                  }
+                                  className={`flex h-6 w-7 items-center justify-center rounded-md ${
+                                    (canvasConfig.headerAlign || 'center') ===
+                                    align
+                                      ? 'bg-stone-900 text-white'
+                                      : 'text-stone-600'
+                                  }`}
+                                >
+                                  {align === 'left' && (
+                                    <AlignLeft className="h-3.5 w-3.5" />
+                                  )}
+                                  {align === 'center' && (
+                                    <AlignCenter className="h-3.5 w-3.5" />
+                                  )}
+                                  {align === 'right' && (
+                                    <AlignRight className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="flex items-center justify-between text-[11px] font-semibold text-stone-600">
-                      <span>하단 꼬리말</span>
+                  <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50/70 p-2.5">
+                    <label className="flex items-center justify-between text-xs font-semibold text-stone-700 cursor-pointer">
+                      <span>하단 머릿말 (꼬리말)</span>
                       <input
                         type="checkbox"
                         checked={canvasConfig.showFooter}
@@ -1752,15 +1814,77 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                       />
                     </label>
                     {canvasConfig.showFooter && (
-                      <input
-                        type="text"
-                        value={canvasConfig.footerText}
-                        onChange={(e) =>
-                          onUpdateCanvasConfig({ footerText: e.target.value })
-                        }
-                        placeholder="꼬리말 입력"
-                        className="w-full rounded border border-stone-200 px-2 py-1 text-xs"
-                      />
+                      <div className="space-y-2 pt-1.5 border-t border-stone-200/80">
+                        <input
+                          type="text"
+                          value={canvasConfig.footerText}
+                          onChange={(e) =>
+                            onUpdateCanvasConfig({ footerText: e.target.value })
+                          }
+                          placeholder="하단 머릿말 입력"
+                          className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs"
+                        />
+                        <FontSelectDropdown
+                          fonts={fonts}
+                          value={
+                            canvasConfig.footerFontFamily ||
+                            "'Noto Serif KR', serif"
+                          }
+                          onChange={(footerFontFamily) =>
+                            onUpdateCanvasConfig({ footerFontFamily })
+                          }
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] text-stone-700">
+                            <span>색상</span>
+                            <input
+                              type="color"
+                              value={
+                                canvasConfig.footerColor &&
+                                canvasConfig.footerColor.startsWith('#') &&
+                                canvasConfig.footerColor.length === 7
+                                  ? canvasConfig.footerColor
+                                  : '#78716c'
+                              }
+                              onChange={(e) =>
+                                onUpdateCanvasConfig({
+                                  footerColor: e.target.value,
+                                })
+                              }
+                              className="h-4 w-4 cursor-pointer rounded border border-stone-300 bg-transparent p-0"
+                            />
+                          </label>
+                          <div className="flex rounded-lg border border-stone-200 bg-white p-0.5">
+                            {(['left', 'center', 'right'] as const).map(
+                              (align) => (
+                                <button
+                                  key={align}
+                                  type="button"
+                                  onClick={() =>
+                                    onUpdateCanvasConfig({ footerAlign: align })
+                                  }
+                                  className={`flex h-6 w-7 items-center justify-center rounded-md ${
+                                    (canvasConfig.footerAlign || 'center') ===
+                                    align
+                                      ? 'bg-stone-900 text-white'
+                                      : 'text-stone-600'
+                                  }`}
+                                >
+                                  {align === 'left' && (
+                                    <AlignLeft className="h-3.5 w-3.5" />
+                                  )}
+                                  {align === 'center' && (
+                                    <AlignCenter className="h-3.5 w-3.5" />
+                                  )}
+                                  {align === 'right' && (
+                                    <AlignRight className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>

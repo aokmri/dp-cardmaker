@@ -1512,6 +1512,254 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               )}
             </div>
 
+            {/* Header & Footer (상/하단 머릿말 · 꼬리말) */}
+            <div className="space-y-3 rounded-xl border border-stone-200 bg-stone-50/70 p-3.5">
+              <div>
+                <span className="text-xs font-semibold text-stone-800">
+                  상/하단 머릿말 설정
+                </span>
+                <p className="text-[11px] text-stone-500">
+                  카드 상단과 하단에 표시할 문구, 글꼴, 색상, 정렬을 설정합니다.
+                </p>
+              </div>
+
+              {/* 상단 머릿말 */}
+              <div className="space-y-2.5 rounded-lg border border-stone-200 bg-white p-3">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-xs font-semibold text-stone-700">
+                    상단 머릿말
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={canvasConfig.showHeader}
+                    onChange={(e) =>
+                      onUpdateCanvasConfig({ showHeader: e.target.checked })
+                    }
+                    className="h-4 w-4 rounded accent-stone-900"
+                  />
+                </label>
+
+                {canvasConfig.showHeader && (
+                  <div className="space-y-2.5 pt-2 border-t border-stone-100">
+                    <input
+                      type="text"
+                      value={canvasConfig.headerText}
+                      onChange={(e) =>
+                        onUpdateCanvasConfig({ headerText: e.target.value })
+                      }
+                      placeholder="상단 머릿말 문구 입력"
+                      className="w-full rounded-lg border border-stone-200 bg-stone-50/50 px-2.5 py-1.5 text-xs text-stone-800 focus:border-stone-800 focus:bg-white focus:outline-none"
+                    />
+
+                    <div className="space-y-1">
+                      <span className="text-[11px] font-medium text-stone-600">
+                        글꼴
+                      </span>
+                      <FontSelectDropdown
+                        fonts={fonts}
+                        value={
+                          canvasConfig.headerFontFamily ||
+                          "'Noto Serif KR', serif"
+                        }
+                        onChange={(headerFontFamily) =>
+                          onUpdateCanvasConfig({ headerFontFamily })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="space-y-1">
+                        <span className="block text-[11px] font-medium text-stone-600">
+                          색상
+                        </span>
+                        <label className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1 cursor-pointer hover:border-stone-300">
+                          <input
+                            type="color"
+                            value={
+                              canvasConfig.headerColor &&
+                              canvasConfig.headerColor.startsWith('#') &&
+                              canvasConfig.headerColor.length === 7
+                                ? canvasConfig.headerColor
+                                : '#78716c'
+                            }
+                            onChange={(e) =>
+                              onUpdateCanvasConfig({
+                                headerColor: e.target.value,
+                              })
+                            }
+                            className="h-4 w-4 shrink-0 cursor-pointer rounded border border-stone-300 bg-transparent p-0"
+                          />
+                          <span className="font-mono text-[11px] text-stone-600 uppercase">
+                            {canvasConfig.headerColor || '#78716c'}
+                          </span>
+                        </label>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="block text-[11px] font-medium text-stone-600">
+                          정렬
+                        </span>
+                        <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
+                          {(['left', 'center', 'right'] as const).map(
+                            (align) => (
+                              <button
+                                key={align}
+                                type="button"
+                                onClick={() =>
+                                  onUpdateCanvasConfig({ headerAlign: align })
+                                }
+                                title={
+                                  align === 'left'
+                                    ? '왼쪽 정렬'
+                                    : align === 'center'
+                                    ? '가운데 정렬'
+                                    : '오른쪽 정렬'
+                                }
+                                className={`flex h-6 w-7 items-center justify-center rounded-md transition cursor-pointer ${
+                                  (canvasConfig.headerAlign || 'center') ===
+                                  align
+                                    ? 'bg-stone-900 text-white shadow-2xs'
+                                    : 'text-stone-600 hover:text-stone-900'
+                                }`}
+                              >
+                                {align === 'left' && (
+                                  <AlignLeft className="h-3.5 w-3.5" />
+                                )}
+                                {align === 'center' && (
+                                  <AlignCenter className="h-3.5 w-3.5" />
+                                )}
+                                {align === 'right' && (
+                                  <AlignRight className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 하단 머릿말(꼬리말) */}
+              <div className="space-y-2.5 rounded-lg border border-stone-200 bg-white p-3">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-xs font-semibold text-stone-700">
+                    하단 머릿말 (꼬리말)
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={canvasConfig.showFooter}
+                    onChange={(e) =>
+                      onUpdateCanvasConfig({ showFooter: e.target.checked })
+                    }
+                    className="h-4 w-4 rounded accent-stone-900"
+                  />
+                </label>
+
+                {canvasConfig.showFooter && (
+                  <div className="space-y-2.5 pt-2 border-t border-stone-100">
+                    <input
+                      type="text"
+                      value={canvasConfig.footerText}
+                      onChange={(e) =>
+                        onUpdateCanvasConfig({ footerText: e.target.value })
+                      }
+                      placeholder="하단 머릿말 문구 입력"
+                      className="w-full rounded-lg border border-stone-200 bg-stone-50/50 px-2.5 py-1.5 text-xs text-stone-800 focus:border-stone-800 focus:bg-white focus:outline-none"
+                    />
+
+                    <div className="space-y-1">
+                      <span className="text-[11px] font-medium text-stone-600">
+                        글꼴
+                      </span>
+                      <FontSelectDropdown
+                        fonts={fonts}
+                        value={
+                          canvasConfig.footerFontFamily ||
+                          "'Noto Serif KR', serif"
+                        }
+                        onChange={(footerFontFamily) =>
+                          onUpdateCanvasConfig({ footerFontFamily })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="space-y-1">
+                        <span className="block text-[11px] font-medium text-stone-600">
+                          색상
+                        </span>
+                        <label className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1 cursor-pointer hover:border-stone-300">
+                          <input
+                            type="color"
+                            value={
+                              canvasConfig.footerColor &&
+                              canvasConfig.footerColor.startsWith('#') &&
+                              canvasConfig.footerColor.length === 7
+                                ? canvasConfig.footerColor
+                                : '#78716c'
+                            }
+                            onChange={(e) =>
+                              onUpdateCanvasConfig({
+                                footerColor: e.target.value,
+                              })
+                            }
+                            className="h-4 w-4 shrink-0 cursor-pointer rounded border border-stone-300 bg-transparent p-0"
+                          />
+                          <span className="font-mono text-[11px] text-stone-600 uppercase">
+                            {canvasConfig.footerColor || '#78716c'}
+                          </span>
+                        </label>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="block text-[11px] font-medium text-stone-600">
+                          정렬
+                        </span>
+                        <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
+                          {(['left', 'center', 'right'] as const).map(
+                            (align) => (
+                              <button
+                                key={align}
+                                type="button"
+                                onClick={() =>
+                                  onUpdateCanvasConfig({ footerAlign: align })
+                                }
+                                title={
+                                  align === 'left'
+                                    ? '왼쪽 정렬'
+                                    : align === 'center'
+                                    ? '가운데 정렬'
+                                    : '오른쪽 정렬'
+                                }
+                                className={`flex h-6 w-7 items-center justify-center rounded-md transition cursor-pointer ${
+                                  (canvasConfig.footerAlign || 'center') ===
+                                  align
+                                    ? 'bg-stone-900 text-white shadow-2xs'
+                                    : 'text-stone-600 hover:text-stone-900'
+                                }`}
+                              >
+                                {align === 'left' && (
+                                  <AlignLeft className="h-3.5 w-3.5" />
+                                )}
+                                {align === 'center' && (
+                                  <AlignCenter className="h-3.5 w-3.5" />
+                                )}
+                                {align === 'right' && (
+                                  <AlignRight className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Card Dimensions */}
             <div className="space-y-3">
               <label className="text-xs font-semibold text-stone-700">카드 크기 조절</label>

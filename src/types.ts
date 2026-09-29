@@ -134,6 +134,12 @@ export interface CanvasConfig {
   footerText: string;
   showHeader: boolean;
   showFooter: boolean;
+  headerFontFamily?: string;
+  headerColor?: string;
+  headerAlign?: TextAlignment;
+  footerFontFamily?: string;
+  footerColor?: string;
+  footerAlign?: TextAlignment;
   paddingX: number;
   paddingY: number;
   bubbleSpacing: number;

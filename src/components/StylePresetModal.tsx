@@ -16,6 +16,7 @@ import {
   WebFont,
 } from '../types';
 import { DEFAULT_META_FONT_FAMILY, INITIAL_SIDE_STYLES } from '../data/presetFonts';
+import { useRasterizedPaperTexture } from '../utils/paperTexture';
 
 type SideKey = 'left' | 'center' | 'right';
 
@@ -162,6 +163,11 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
     null
   );
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  const textureLayer = useRasterizedPaperTexture(
+    canvasConfig.bgColor,
+    canvasConfig.paperTexture
+  );
 
   const fileInputRefs: Record<
     SideKey | 'all',
@@ -457,6 +463,29 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
             }}
           />
         )}
+
+        {canvasConfig.paperTexture !== 'none' &&
+          canvasConfig.paperTexture !== 'custom' &&
+          textureLayer.tileDataUrl && (
+            <>
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  backgroundImage: `url("${textureLayer.tileDataUrl}")`,
+                  backgroundRepeat: 'repeat',
+                  backgroundSize: textureLayer.backgroundSize,
+                }}
+              />
+              {textureLayer.vignetteCss && (
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    backgroundImage: textureLayer.vignetteCss,
+                  }}
+                />
+              )}
+            </>
+          )}
 
         <div
           className={`relative z-10 flex w-full flex-col ${
