@@ -8,6 +8,8 @@ import {
   Check,
   ClipboardPaste,
   Sparkles,
+  Smartphone,
+  AlertCircle,
 } from 'lucide-react';
 import { Bubble, DefaultSideStyles, WebFont } from '../types';
 import { INITIAL_SIDE_STYLES, PRESET_FONTS } from '../data/presetFonts';
@@ -17,6 +19,7 @@ import {
   requestClipboardWithPermission,
 } from '../utils/fontLoader';
 import { FontSelectDropdown } from './FontSelectDropdown';
+import { ClipboardGuideModal } from './ClipboardGuideModal';
 
 interface TextImportModalProps {
   isOpen: boolean;
@@ -252,6 +255,11 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
   const [disabledAutoFontSideMap, setDisabledAutoFontSideMap] = useState<
     Partial<Record<'left' | 'right', boolean>>
   >({});
+  const [pastedPlainNotice, setPastedPlainNotice] = useState(false);
+  const [isClipboardGuideOpen, setIsClipboardGuideOpen] = useState(false);
+  const [clipboardPermissionState, setClipboardPermissionState] = useState<
+    PermissionState | 'unknown'
+  >('unknown');
 
   const resetModalTextAndState = () => {
     setInputText('');
@@ -261,6 +269,7 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
     setUserCustomSideFontMap({});
     setDisabledAutoFontNickMap({});
     setDisabledAutoFontSideMap({});
+    setPastedPlainNotice(false);
   };
 
   const handleCloseWithReset = () => {
@@ -389,12 +398,14 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
     }
 
     if (htmlData) {
+      setPastedPlainNotice(false);
       setPastedHtml((prev) =>
         isReplacingAll || !prev ? htmlData : `${prev}\n${htmlData}`
       );
       return;
     }
 
+    let foundAsyncHtml = false;
     if (navigator.clipboard && 'read' in navigator.clipboard) {
       try {
         let asyncHtml = '';
@@ -406,6 +417,8 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
           }
         }
         if (asyncHtml) {
+          foundAsyncHtml = true;
+          setPastedPlainNotice(false);
           setPastedHtml((prev) =>
             isReplacingAll || !prev ? asyncHtml : `${prev}\n${asyncHtml}`
           );
@@ -414,30 +427,43 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
         // Ignore clipboard read permission errors
       }
     }
+
+    if (!foundAsyncHtml) {
+      setPastedPlainNotice(true);
+    }
   };
 
-  const handleClipboardPasteButton = async () => {
-    const res = await requestClipboardWithPermission();
-    if (res.status === 'ok' && (res.plainText || res.htmlData)) {
-      let plain = res.plainText;
-      if (!plain && res.htmlData && typeof DOMParser !== 'undefined') {
-        try {
-          const doc = new DOMParser().parseFromString(
-            res.htmlData,
-            'text/html'
-          );
-          plain = doc.body?.innerText || doc.body?.textContent || '';
-        } catch {
-          // ignore
-        }
+  const applyClipboardContent = (htmlData: string, plainText: string) => {
+    let plain = plainText;
+    if (!plain && htmlData && typeof DOMParser !== 'undefined') {
+      try {
+        const doc = new DOMParser().parseFromString(htmlData, 'text/html');
+        plain = doc.body?.innerText || doc.body?.textContent || '';
+      } catch {
+        // ignore
       }
-      setUserCustomFontMap({});
-      setUserCustomSideFontMap({});
-      setDisabledAutoFontNickMap({});
-      setDisabledAutoFontSideMap({});
-      setInputText(plain);
-      setPastedHtml(res.htmlData || '');
     }
+    setUserCustomFontMap({});
+    setUserCustomSideFontMap({});
+    setDisabledAutoFontNickMap({});
+    setDisabledAutoFontSideMap({});
+    setPastedPlainNotice(false);
+    setInputText(plain);
+    setPastedHtml(htmlData || '');
+  };
+
+  const handleClipboardPasteButton = async (): Promise<boolean> => {
+    const res = await requestClipboardWithPermission();
+    setClipboardPermissionState(res.permissionState);
+    if (res.status === 'denied') {
+      setIsClipboardGuideOpen(true);
+      return false;
+    }
+    if (res.status === 'ok' && (res.plainText || res.htmlData)) {
+      applyClipboardContent(res.htmlData, res.plainText);
+      return true;
+    }
+    return false;
   };
 
   const handleSelectNicknameSide = (targetNick: string, side: 'left' | 'right') => {
@@ -623,21 +649,31 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
                     <span>초기화</span>
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={handleClipboardPasteButton}
-                  className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50/80 px-2 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-100 transition cursor-pointer"
-                  title="클립보드에서 텍스트와 대화 글꼴 정보를 함께 불러옵니다"
-                >
-                  <ClipboardPaste className="h-3 w-3 text-amber-700" />
-                  <span>클립보드 붙여넣기</span>
-                </button>
               </div>
             </div>
-            <div className="relative mt-1.5">
+
+            {/* Mobile / Format-stripping environment guidance box */}
+            <div className="mt-2 flex items-center justify-between gap-2.5 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-[11px] text-amber-950">
+              <div className="flex items-start gap-2 min-w-0">
+                <Smartphone className="h-4 w-4 shrink-0 text-amber-700 mt-0.5" />
+                <p className="leading-relaxed">
+                  <span className="font-semibold">모바일이나 붙여넣기 시 서식이 사라지는 환경</span>에서는{' '}
+                  <button
+                    type="button"
+                    onClick={handleClipboardPasteButton}
+                    className="inline-flex items-center gap-0.5 font-bold text-amber-900 underline decoration-amber-500 underline-offset-2 hover:text-amber-700 cursor-pointer"
+                  >
+                    &lsquo;클립보드 붙여넣기&rsquo;
+                  </button>{' '}
+                  를 사용해 주세요.
+                </p>
+              </div>
+            </div>
+
+            <div className="relative mt-2">
               <textarea
                 rows={8}
-                placeholder={`이세계 우체통에서 나눈 쪽지를 복사하여 붙여넣으면 말풍선과 '대화' 글꼴이 함께 변환됩니다.\n예:\n대화1\n닉네임A\n•\nn세 n월 n일\n대화2\n닉네임B\n•\nn세 n월 n일`}
+                placeholder={`이체통에서 나눈 쪽지를 붙여넣으세요.\n\n예:\n대화1\n닉네임A\n•\nn세 n월 n일`}
                 value={inputText}
                 onPaste={handleTextareaPaste}
                 onChange={(e) => {
@@ -649,10 +685,23 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
                     setUserCustomSideFontMap({});
                     setDisabledAutoFontNickMap({});
                     setDisabledAutoFontSideMap({});
+                    setPastedPlainNotice(false);
                   }
                 }}
                 className="w-full rounded-xl border border-stone-200 p-3.5 pr-9 text-sm text-stone-800 placeholder-stone-400 focus:border-stone-900 focus:outline-none"
               />
+              {!inputText.trim() && (
+                <div className="pointer-events-none absolute inset-x-3 bottom-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleClipboardPasteButton}
+                    className="pointer-events-auto inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50/95 px-3 py-1.5 text-xs font-semibold text-amber-950 shadow-sm hover:bg-amber-100 transition cursor-pointer"
+                  >
+                    <ClipboardPaste className="h-3.5 w-3.5 text-amber-800" />
+                    <span>클립보드 붙여넣기 (서식·글꼴 유지)</span>
+                  </button>
+                </div>
+              )}
               {inputText.length > 0 && (
                 <button
                   type="button"
@@ -664,6 +713,31 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
                 </button>
               )}
             </div>
+
+            {/* Nudge banner when user pasted directly into textarea and formatting (HTML) was stripped */}
+            {pastedPlainNotice && inputText.trim().length > 0 && !pastedHtml && (
+              <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs text-amber-950">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-700 mt-0.5" />
+                  <div className="leading-snug">
+                    <p className="font-semibold text-amber-950">
+                      글꼴(서식) 정보 없이 텍스트만 붙여넣어졌습니다.
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-amber-800">
+                      모바일 등에서 대화 글꼴까지 함께 불러오려면 아래 버튼으로 다시 붙여넣어 보세요.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClipboardPasteButton}
+                  className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-800 px-3 py-1.5 text-[11px] font-semibold text-white shadow-2xs hover:bg-amber-900 transition cursor-pointer"
+                >
+                  <ClipboardPaste className="h-3.5 w-3.5" />
+                  <span>클립보드 붙여넣기로 다시 불러오기</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Detected Nicknames Left/Right Selector + Detected Dialogue Font underneath each position */}
@@ -1077,6 +1151,16 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
           </div>
         </div>
       </div>
+
+      <ClipboardGuideModal
+        isOpen={isClipboardGuideOpen}
+        onClose={() => setIsClipboardGuideOpen(false)}
+        onPasteReceived={(htmlData, plainText) => {
+          applyClipboardContent(htmlData, plainText);
+        }}
+        onRetryPermission={handleClipboardPasteButton}
+        permissionState={clipboardPermissionState}
+      />
     </div>
   );
 };

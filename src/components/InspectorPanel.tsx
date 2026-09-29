@@ -1671,12 +1671,9 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   </div>
 
                   {/* Top & Bottom Divider Lines */}
-                  <div className="space-y-3 rounded-xl border border-stone-200 bg-stone-50/70 p-3.5">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-semibold text-stone-800">상/하단 구분선</span>
-                        <p className="text-[11px] text-stone-500">대화 영역과 일치하는 기준선</p>
-                      </div>
+                  <div className="border-y border-stone-200 py-3 space-y-3">
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <span className="text-xs font-semibold text-stone-700">상/하단 구분선</span>
                       <input
                         type="checkbox"
                         checked={canvasConfig.showDividers}
@@ -1685,10 +1682,10 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                         }
                         className="h-4 w-4 rounded accent-stone-900"
                       />
-                    </div>
+                    </label>
 
                     {canvasConfig.showDividers && (
-                      <div className="space-y-2.5 pt-2 border-t border-stone-200">
+                      <div className="space-y-2.5 pt-2 border-t border-stone-100">
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-stone-600">선 스타일</span>
                           <div className="flex gap-1">
@@ -1738,7 +1735,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               )}
             </div>
 
-            {/* Category 2: 상/하단 머릿말 설정 (Folded by default) */}
+            {/* Category 2: 머릿말 & 꼬리말 (Folded by default) */}
             <div className="rounded-xl border border-stone-200 bg-white overflow-hidden shadow-2xs">
               <button
                 type="button"
@@ -1747,7 +1744,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               >
                 <div>
                   <span className="text-xs font-bold text-stone-800">
-                    상/하단 머릿말 설정
+                    머릿말 & 꼬리말
                   </span>
                 </div>
                 <ChevronDown
@@ -1758,251 +1755,249 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               </button>
 
               {isCanvasHeaderFooterOpen && (
-                <div className="p-3.5 space-y-3 border-t border-stone-100">
-                  <p className="text-[11px] text-stone-500">
-                    카드 상단과 하단에 표시할 문구, 글꼴, 색상, 정렬을 설정합니다.
-                  </p>
-
-                  {/* 상단 머릿말 */}
-                  <div className="space-y-2.5 rounded-lg border border-stone-200 bg-stone-50/50 p-3">
-                    <label className="flex items-center justify-between cursor-pointer">
-                      <span className="text-xs font-semibold text-stone-700">
-                        상단 머릿말
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={canvasConfig.showHeader}
-                        onChange={(e) =>
-                          onUpdateCanvasConfig({ showHeader: e.target.checked })
-                        }
-                        className="h-4 w-4 rounded accent-stone-900"
-                      />
-                    </label>
-
-                    {canvasConfig.showHeader && (
-                      <div className="space-y-2.5 pt-2 border-t border-stone-200">
+                <div className="p-3.5 border-t border-stone-100">
+                  <div className="divide-y divide-stone-200 border-y border-stone-200">
+                    {/* 머릿말 */}
+                    <div className="space-y-2.5 py-3">
+                      <label className="flex items-center justify-between cursor-pointer">
+                        <span className="text-xs font-semibold text-stone-700">
+                          머릿말
+                        </span>
                         <input
-                          type="text"
-                          value={canvasConfig.headerText}
+                          type="checkbox"
+                          checked={canvasConfig.showHeader}
                           onChange={(e) =>
-                            onUpdateCanvasConfig({ headerText: e.target.value })
+                            onUpdateCanvasConfig({ showHeader: e.target.checked })
                           }
-                          placeholder="상단 머릿말 문구 입력"
-                          className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"
+                          className="h-4 w-4 rounded accent-stone-900"
                         />
+                      </label>
 
-                        <div className="space-y-1">
-                          <span className="text-[11px] font-medium text-stone-600">
-                            글꼴
-                          </span>
-                          <FontSelectDropdown
-                            fonts={fonts}
-                            value={
-                              canvasConfig.headerFontFamily ||
-                              "'Noto Serif KR', serif"
+                      {canvasConfig.showHeader && (
+                        <div className="space-y-2.5 pt-2 border-t border-stone-100">
+                          <input
+                            type="text"
+                            value={canvasConfig.headerText}
+                            onChange={(e) =>
+                              onUpdateCanvasConfig({ headerText: e.target.value })
                             }
-                            onChange={(headerFontFamily) =>
-                              onUpdateCanvasConfig({ headerFontFamily })
-                            }
+                            placeholder="머릿말 문구 입력"
+                            className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"
                           />
-                        </div>
 
-                        <div className="flex items-center justify-between gap-2">
                           <div className="space-y-1">
-                            <span className="block text-[11px] font-medium text-stone-600">
-                              색상
+                            <span className="text-[11px] font-medium text-stone-600">
+                              글꼴
                             </span>
-                            <label className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1 cursor-pointer hover:border-stone-300">
-                              <input
-                                type="color"
-                                value={
-                                  canvasConfig.headerColor &&
-                                  canvasConfig.headerColor.startsWith('#') &&
-                                  canvasConfig.headerColor.length === 7
-                                    ? canvasConfig.headerColor
-                                    : '#78716c'
-                                }
-                                onChange={(e) =>
-                                  onUpdateCanvasConfig({
-                                    headerColor: e.target.value,
-                                  })
-                                }
-                                className="h-4 w-4 shrink-0 cursor-pointer rounded border border-stone-300 bg-transparent p-0"
-                              />
-                              <span className="font-mono text-[11px] text-stone-600 uppercase">
-                                {canvasConfig.headerColor || '#78716c'}
-                              </span>
-                            </label>
+                            <FontSelectDropdown
+                              fonts={fonts}
+                              value={
+                                canvasConfig.headerFontFamily ||
+                                "'Noto Serif KR', serif"
+                              }
+                              onChange={(headerFontFamily) =>
+                                onUpdateCanvasConfig({ headerFontFamily })
+                              }
+                            />
                           </div>
 
-                          <div className="space-y-1">
-                            <span className="block text-[11px] font-medium text-stone-600">
-                              정렬
-                            </span>
-                            <div className="flex rounded-lg border border-stone-200 bg-white p-0.5">
-                              {(['left', 'center', 'right'] as const).map(
-                                (align) => (
-                                  <button
-                                    key={align}
-                                    type="button"
-                                    onClick={() =>
-                                      onUpdateCanvasConfig({ headerAlign: align })
-                                    }
-                                    title={
-                                      align === 'left'
-                                        ? '왼쪽 정렬'
-                                        : align === 'center'
-                                        ? '가운데 정렬'
-                                        : '오른쪽 정렬'
-                                    }
-                                    className={`flex h-6 w-7 items-center justify-center rounded-md transition cursor-pointer ${
-                                      (canvasConfig.headerAlign || 'center') ===
-                                      align
-                                        ? 'bg-stone-900 text-white shadow-2xs'
-                                        : 'text-stone-600 hover:text-stone-900'
-                                    }`}
-                                  >
-                                    {align === 'left' && (
-                                      <AlignLeft className="h-3.5 w-3.5" />
-                                    )}
-                                    {align === 'center' && (
-                                      <AlignCenter className="h-3.5 w-3.5" />
-                                    )}
-                                    {align === 'right' && (
-                                      <AlignRight className="h-3.5 w-3.5" />
-                                    )}
-                                  </button>
-                                )
-                              )}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="space-y-1">
+                              <span className="block text-[11px] font-medium text-stone-600">
+                                색상
+                              </span>
+                              <label className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1 cursor-pointer hover:border-stone-300">
+                                <input
+                                  type="color"
+                                  value={
+                                    canvasConfig.headerColor &&
+                                    canvasConfig.headerColor.startsWith('#') &&
+                                    canvasConfig.headerColor.length === 7
+                                      ? canvasConfig.headerColor
+                                      : '#78716c'
+                                  }
+                                  onChange={(e) =>
+                                    onUpdateCanvasConfig({
+                                      headerColor: e.target.value,
+                                    })
+                                  }
+                                  className="h-4 w-4 shrink-0 cursor-pointer rounded border border-stone-300 bg-transparent p-0"
+                                />
+                                <span className="font-mono text-[11px] text-stone-600 uppercase">
+                                  {canvasConfig.headerColor || '#78716c'}
+                                </span>
+                              </label>
+                            </div>
+
+                            <div className="space-y-1">
+                              <span className="block text-[11px] font-medium text-stone-600">
+                                정렬
+                              </span>
+                              <div className="flex rounded-lg border border-stone-200 bg-white p-0.5">
+                                {(['left', 'center', 'right'] as const).map(
+                                  (align) => (
+                                    <button
+                                      key={align}
+                                      type="button"
+                                      onClick={() =>
+                                        onUpdateCanvasConfig({ headerAlign: align })
+                                      }
+                                      title={
+                                        align === 'left'
+                                          ? '왼쪽 정렬'
+                                          : align === 'center'
+                                          ? '가운데 정렬'
+                                          : '오른쪽 정렬'
+                                      }
+                                      className={`flex h-6 w-7 items-center justify-center rounded-md transition cursor-pointer ${
+                                        (canvasConfig.headerAlign || 'center') ===
+                                        align
+                                          ? 'bg-stone-900 text-white shadow-2xs'
+                                          : 'text-stone-600 hover:text-stone-900'
+                                      }`}
+                                    >
+                                      {align === 'left' && (
+                                        <AlignLeft className="h-3.5 w-3.5" />
+                                      )}
+                                      {align === 'center' && (
+                                        <AlignCenter className="h-3.5 w-3.5" />
+                                      )}
+                                      {align === 'right' && (
+                                        <AlignRight className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                  )
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
 
-                  {/* 하단 머릿말(꼬리말) */}
-                  <div className="space-y-2.5 rounded-lg border border-stone-200 bg-stone-50/50 p-3">
-                    <label className="flex items-center justify-between cursor-pointer">
-                      <span className="text-xs font-semibold text-stone-700">
-                        하단 머릿말 (꼬리말)
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={canvasConfig.showFooter}
-                        onChange={(e) =>
-                          onUpdateCanvasConfig({ showFooter: e.target.checked })
-                        }
-                        className="h-4 w-4 rounded accent-stone-900"
-                      />
-                    </label>
-
-                    {canvasConfig.showFooter && (
-                      <div className="space-y-2.5 pt-2 border-t border-stone-200">
+                    {/* 꼬리말 */}
+                    <div className="space-y-2.5 py-3">
+                      <label className="flex items-center justify-between cursor-pointer">
+                        <span className="text-xs font-semibold text-stone-700">
+                          꼬리말
+                        </span>
                         <input
-                          type="text"
-                          value={canvasConfig.footerText}
+                          type="checkbox"
+                          checked={canvasConfig.showFooter}
                           onChange={(e) =>
-                            onUpdateCanvasConfig({ footerText: e.target.value })
+                            onUpdateCanvasConfig({ showFooter: e.target.checked })
                           }
-                          placeholder="하단 머릿말 문구 입력"
-                          className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"
+                          className="h-4 w-4 rounded accent-stone-900"
                         />
+                      </label>
 
-                        <div className="space-y-1">
-                          <span className="text-[11px] font-medium text-stone-600">
-                            글꼴
-                          </span>
-                          <FontSelectDropdown
-                            fonts={fonts}
-                            value={
-                              canvasConfig.footerFontFamily ||
-                              "'Noto Serif KR', serif"
+                      {canvasConfig.showFooter && (
+                        <div className="space-y-2.5 pt-2 border-t border-stone-100">
+                          <input
+                            type="text"
+                            value={canvasConfig.footerText}
+                            onChange={(e) =>
+                              onUpdateCanvasConfig({ footerText: e.target.value })
                             }
-                            onChange={(footerFontFamily) =>
-                              onUpdateCanvasConfig({ footerFontFamily })
-                            }
+                            placeholder="꼬리말 문구 입력"
+                            className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"
                           />
-                        </div>
 
-                        <div className="flex items-center justify-between gap-2">
                           <div className="space-y-1">
-                            <span className="block text-[11px] font-medium text-stone-600">
-                              색상
+                            <span className="text-[11px] font-medium text-stone-600">
+                              글꼴
                             </span>
-                            <label className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1 cursor-pointer hover:border-stone-300">
-                              <input
-                                type="color"
-                                value={
-                                  canvasConfig.footerColor &&
-                                  canvasConfig.footerColor.startsWith('#') &&
-                                  canvasConfig.footerColor.length === 7
-                                    ? canvasConfig.footerColor
-                                    : '#78716c'
-                                }
-                                onChange={(e) =>
-                                  onUpdateCanvasConfig({
-                                    footerColor: e.target.value,
-                                  })
-                                }
-                                className="h-4 w-4 shrink-0 cursor-pointer rounded border border-stone-300 bg-transparent p-0"
-                              />
-                              <span className="font-mono text-[11px] text-stone-600 uppercase">
-                                {canvasConfig.footerColor || '#78716c'}
-                              </span>
-                            </label>
+                            <FontSelectDropdown
+                              fonts={fonts}
+                              value={
+                                canvasConfig.footerFontFamily ||
+                                "'Noto Serif KR', serif"
+                              }
+                              onChange={(footerFontFamily) =>
+                                onUpdateCanvasConfig({ footerFontFamily })
+                              }
+                            />
                           </div>
 
-                          <div className="space-y-1">
-                            <span className="block text-[11px] font-medium text-stone-600">
-                              정렬
-                            </span>
-                            <div className="flex rounded-lg border border-stone-200 bg-white p-0.5">
-                              {(['left', 'center', 'right'] as const).map(
-                                (align) => (
-                                  <button
-                                    key={align}
-                                    type="button"
-                                    onClick={() =>
-                                      onUpdateCanvasConfig({ footerAlign: align })
-                                    }
-                                    title={
-                                      align === 'left'
-                                        ? '왼쪽 정렬'
-                                        : align === 'center'
-                                        ? '가운데 정렬'
-                                        : '오른쪽 정렬'
-                                    }
-                                    className={`flex h-6 w-7 items-center justify-center rounded-md transition cursor-pointer ${
-                                      (canvasConfig.footerAlign || 'center') ===
-                                      align
-                                        ? 'bg-stone-900 text-white shadow-2xs'
-                                        : 'text-stone-600 hover:text-stone-900'
-                                    }`}
-                                  >
-                                    {align === 'left' && (
-                                      <AlignLeft className="h-3.5 w-3.5" />
-                                    )}
-                                    {align === 'center' && (
-                                      <AlignCenter className="h-3.5 w-3.5" />
-                                    )}
-                                    {align === 'right' && (
-                                      <AlignRight className="h-3.5 w-3.5" />
-                                    )}
-                                  </button>
-                                )
-                              )}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="space-y-1">
+                              <span className="block text-[11px] font-medium text-stone-600">
+                                색상
+                              </span>
+                              <label className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1 cursor-pointer hover:border-stone-300">
+                                <input
+                                  type="color"
+                                  value={
+                                    canvasConfig.footerColor &&
+                                    canvasConfig.footerColor.startsWith('#') &&
+                                    canvasConfig.footerColor.length === 7
+                                      ? canvasConfig.footerColor
+                                      : '#78716c'
+                                  }
+                                  onChange={(e) =>
+                                    onUpdateCanvasConfig({
+                                      footerColor: e.target.value,
+                                    })
+                                  }
+                                  className="h-4 w-4 shrink-0 cursor-pointer rounded border border-stone-300 bg-transparent p-0"
+                                />
+                                <span className="font-mono text-[11px] text-stone-600 uppercase">
+                                  {canvasConfig.footerColor || '#78716c'}
+                                </span>
+                              </label>
+                            </div>
+
+                            <div className="space-y-1">
+                              <span className="block text-[11px] font-medium text-stone-600">
+                                정렬
+                              </span>
+                              <div className="flex rounded-lg border border-stone-200 bg-white p-0.5">
+                                {(['left', 'center', 'right'] as const).map(
+                                  (align) => (
+                                    <button
+                                      key={align}
+                                      type="button"
+                                      onClick={() =>
+                                        onUpdateCanvasConfig({ footerAlign: align })
+                                      }
+                                      title={
+                                        align === 'left'
+                                          ? '왼쪽 정렬'
+                                          : align === 'center'
+                                          ? '가운데 정렬'
+                                          : '오른쪽 정렬'
+                                      }
+                                      className={`flex h-6 w-7 items-center justify-center rounded-md transition cursor-pointer ${
+                                        (canvasConfig.footerAlign || 'center') ===
+                                        align
+                                          ? 'bg-stone-900 text-white shadow-2xs'
+                                          : 'text-stone-600 hover:text-stone-900'
+                                      }`}
+                                    >
+                                      {align === 'left' && (
+                                        <AlignLeft className="h-3.5 w-3.5" />
+                                      )}
+                                      {align === 'center' && (
+                                        <AlignCenter className="h-3.5 w-3.5" />
+                                      )}
+                                      {align === 'right' && (
+                                        <AlignRight className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                  )
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Category 3: 크기조절 (대화 영역 & 구분선 너비 / 카드 크기 조절 / 말풍선 간 간격) */}
+            {/* Category 3: 크기조절 (대화 너비 / 카드 크기 조절 / 말풍선 간 간격) */}
             <div className="rounded-xl border border-stone-200 bg-white overflow-hidden shadow-2xs">
               <button
                 type="button"
@@ -2020,30 +2015,23 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               {isCanvasSizeOpen && (
                 <div className="p-3.5 space-y-5 border-t border-stone-100">
                   {/* Conversation Flow Area Width */}
-                  <div className="space-y-3 rounded-xl border border-stone-200 bg-stone-50/70 p-3.5">
-                    <div>
-                      <span className="text-xs font-semibold text-stone-800">대화 영역 & 구분선 너비</span>
-                      <p className="text-[11px] text-stone-500">
-                        구분선과 말풍선이 위치하는 영역의 폭을 일치시킵니다.
-                      </p>
-                    </div>
-                    <div className="space-y-2 pt-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-stone-600">영역 너비 비율</span>
-                        <input
-                          type="range"
-                          min="60"
-                          max="96"
-                          value={canvasConfig.dividerWidth}
-                          onChange={(e) =>
-                            onUpdateCanvasConfig({ dividerWidth: Number(e.target.value) })
-                          }
-                          className="w-28 accent-stone-900"
-                        />
-                        <span className="w-8 text-right font-mono text-xs">
-                          {canvasConfig.dividerWidth}%
-                        </span>
-                      </div>
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-stone-700">대화 너비</label>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-stone-600">영역 너비 비율</span>
+                      <input
+                        type="range"
+                        min="60"
+                        max="96"
+                        value={canvasConfig.dividerWidth}
+                        onChange={(e) =>
+                          onUpdateCanvasConfig({ dividerWidth: Number(e.target.value) })
+                        }
+                        className="w-28 accent-stone-900"
+                      />
+                      <span className="w-8 text-right font-mono text-xs">
+                        {canvasConfig.dividerWidth}%
+                      </span>
                     </div>
                   </div>
 
