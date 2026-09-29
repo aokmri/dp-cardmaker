@@ -730,11 +730,48 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
 
       {/* 6. Corner Radius & Padding */}
       <div className="space-y-3">
-        <label className="text-xs font-semibold text-stone-700">말풍선 둥글기 & 여백</label>
+        <label className="text-xs font-semibold text-stone-700">말풍선 모양 & 여백</label>
+
+        {/* Bubble Shape (일반 / 구름 말풍선) */}
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-stone-600">말풍선 모양</span>
+          <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
+            <button
+              type="button"
+              onClick={() =>
+                onUpdateSideStyle(activeSide, {
+                  bubbleShape: 'default',
+                })
+              }
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer ${
+                (currentStyle.bubbleShape || 'default') === 'default'
+                  ? 'bg-stone-900 text-white shadow-sm'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              일반 말풍선
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onUpdateSideStyle(activeSide, {
+                  bubbleShape: 'cloud',
+                })
+              }
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer ${
+                currentStyle.bubbleShape === 'cloud'
+                  ? 'bg-stone-900 text-white shadow-sm'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              구름 말풍선
+            </button>
+          </div>
+        </div>
 
         {/* Bubble Tail ON/OFF */}
         <div className="flex items-center justify-between text-xs">
-          <span className="text-stone-600">말풍선 꼬리 (뾰족 모서리)</span>
+          <span className="text-stone-600">말풍선 꼬리</span>
           <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
             <button
               type="button"

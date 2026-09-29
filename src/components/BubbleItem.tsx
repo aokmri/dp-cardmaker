@@ -4,6 +4,7 @@ import { Bubble, WebFont } from '../types';
 import { FloatingTextToolbar } from './FloatingTextToolbar';
 import { recordSelection, getSelectionWithinBubble } from '../utils/richText';
 import { buildPasteContentFromClipboard } from '../utils/pasteFormatter';
+import { CloudBubbleBackground } from '../utils/cloudBubble';
 
 interface BubbleItemProps {
   bubble: Bubble;
@@ -60,6 +61,10 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     top: number;
     left: number;
   } | null>(null);
+  const [boxSize, setBoxSize] = useState<{ width: number; height: number }>({
+    width: 140,
+    height: 52,
+  });
 
   const clearLongPressTimer = useCallback(() => {
     if (longPressTimerRef.current !== null) {
@@ -195,6 +200,16 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
         }
       }
     }
+
+    const measuredW = boxEl.offsetWidth;
+    const measuredH = boxEl.offsetHeight;
+    if (measuredW > 0 && measuredH > 0) {
+      setBoxSize((prev) =>
+        prev.width === measuredW && prev.height === measuredH
+          ? prev
+          : { width: measuredW, height: measuredH }
+      );
+    }
   }, [bubble.hasBorder, bubble.paddingX]);
 
   // Sync initial or updated html into contentEditable without interrupting typing, then fit width
@@ -219,6 +234,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     bubble.paddingX,
     bubble.paddingY,
     bubble.hasBorder,
+    bubble.bubbleShape,
     bubble.align,
     bubble.showMeta,
     bubble.speaker,
@@ -408,17 +424,22 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     cursor: 'text',
   };
 
+  const isCloudShape = bubble.bubbleShape === 'cloud';
+  const effectiveHasTail =
+    bubble.hasTail !== undefined ? bubble.hasTail : bubble.align !== 'center';
+
   const bubbleContainerStyle: React.CSSProperties = {
-    backgroundColor: bubble.bgColor,
-    borderRadius: getBorderRadius(),
+    backgroundColor: isCloudShape ? 'transparent' : bubble.bgColor,
+    borderRadius: isCloudShape ? `${bubble.borderRadius ?? 14}px` : getBorderRadius(),
     paddingTop: `${bubble.paddingY}px`,
     paddingBottom: `${bubble.paddingY}px`,
     paddingLeft: `${bubble.paddingX}px`,
     paddingRight: `${bubble.paddingX}px`,
-    boxShadow: getBoxShadow(),
-    border: bubble.hasBorder
-      ? `1px solid ${bubble.borderColor || '#E5DED3'}`
-      : 'none',
+    boxShadow: isCloudShape ? 'none' : getBoxShadow(),
+    border:
+      !isCloudShape && bubble.hasBorder
+        ? `1px solid ${bubble.borderColor || '#E5DED3'}`
+        : 'none',
     width: 'max-content',
     maxWidth: '100%',
     boxSizing: 'border-box',
@@ -581,6 +602,22 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
               : 'hover:ring-1 hover:ring-stone-300'
           }`}
         >
+          {isCloudShape && (
+            <CloudBubbleBackground
+              width={boxSize.width}
+              height={boxSize.height}
+              bgColor={bubble.bgColor}
+              borderRadius={bubble.borderRadius ?? 14}
+              align={bubble.align}
+              hasTail={effectiveHasTail}
+              hasBorder={bubble.hasBorder}
+              borderColor={bubble.borderColor}
+              hasShadow={bubble.hasShadow}
+              hasBottomShadow={bubble.hasBottomShadow}
+              bottomShadowColor={bubble.bottomShadowColor}
+            />
+          )}
+
           <div
             ref={textEditableRef}
             id={`bubble-text-${bubble.id}`}
@@ -591,7 +628,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
             onBlur={handleBlur}
             onMouseUp={checkSelection}
             onKeyUp={checkSelection}
-            style={textStyle}
+            style={{ ...textStyle, position: 'relative', zIndex: 1 }}
           />
 
           {/* Theme 2 ('inside'): Bottom divider line + Name • Date inside the bubble */}
@@ -599,7 +636,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
             (bubble.metaTheme || 'inside') === 'inside' &&
             Boolean(bubble.speaker?.trim() || bubble.dateText?.trim()) && (
               <div
-                className="mt-1.5 pt-1 border-t select-none"
+                className="relative z-10 mt-1.5 pt-1 border-t select-none"
                 style={{
                   borderColor:
                     bubble.hasBorder && bubble.borderColor

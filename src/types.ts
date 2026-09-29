@@ -3,6 +3,7 @@ export type TextAlignment = 'left' | 'center' | 'right';
 export type CanvasAspectRatio = 'auto' | 'square' | 'story' | 'wide';
 export type CardThemeId = 'legacy' | 'default-white' | 'default-dark';
 export type BubbleMetaTheme = 'outside' | 'inside';
+export type BubbleShapeType = 'default' | 'cloud';
 
 export interface Bubble {
   id: string;
@@ -32,6 +33,7 @@ export interface Bubble {
   isUnderline: boolean;
   textAlign: TextAlignment;
   borderRadius: number;
+  bubbleShape?: BubbleShapeType; // 'default' | 'cloud'
   hasTail?: boolean; // true: one sharp corner on left/right bubble, false: all 4 corners rounded
   cornerStyle?: 'directional' | 'rounded' | 'sharp-tl' | 'sharp-tr'; // directional: left bubble has sharp TL, right bubble has sharp TR
   fitWidth?: boolean; // wraps text tightly with equal left-right padding
@@ -58,6 +60,7 @@ export const SIDE_STYLE_KEYS: (keyof BubbleSideStyle)[] = [
   'isUnderline',
   'textAlign',
   'borderRadius',
+  'bubbleShape',
   'hasTail',
   'paddingY',
   'paddingX',
@@ -87,6 +90,7 @@ export interface BubbleSideStyle {
   isUnderline: boolean;
   textAlign: TextAlignment;
   borderRadius: number;
+  bubbleShape?: BubbleShapeType;
   hasTail?: boolean;
   paddingY: number;
   paddingX: number;

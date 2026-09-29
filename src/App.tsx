@@ -218,6 +218,7 @@ export default function App() {
       isUnderline: sideStyle.isUnderline,
       textAlign: sideStyle.textAlign,
       borderRadius: sideStyle.borderRadius,
+      bubbleShape: sideStyle.bubbleShape || 'default',
       hasTail: sideStyle.hasTail,
       cornerStyle: 'directional',
       paddingY: sideStyle.paddingY,
@@ -517,7 +518,7 @@ export default function App() {
   const handleImportBubbles = (newBubbles: Bubble[], mode: 'replace' | 'append') => {
     recordHistory(false);
 
-    // Populate defaultSideStyles with extracted nickname (이름) and date/time (시간) per side
+    // Populate defaultSideStyles with extracted nickname (이름), date/time (시간), and fontFamily per side
     setDefaultSideStyles((prev) => {
       const next = {
         left: { ...prev.left },
@@ -528,11 +529,15 @@ export default function App() {
         const sideBubbles = newBubbles.filter((b) => b.align === side);
         const firstWithSpeaker = sideBubbles.find((b) => b.speaker?.trim());
         const firstWithDate = sideBubbles.find((b) => b.dateText?.trim());
+        const firstWithFont = sideBubbles.find((b) => b.fontFamily?.trim());
         if (firstWithSpeaker?.speaker) {
           next[side].speaker = firstWithSpeaker.speaker.trim();
         }
         if (firstWithDate?.dateText) {
           next[side].dateText = firstWithDate.dateText.trim();
+        }
+        if (firstWithFont?.fontFamily) {
+          next[side].fontFamily = firstWithFont.fontFamily;
         }
       }
       return next;
@@ -1267,6 +1272,8 @@ export default function App() {
         onImport={handleImportBubbles}
         defaultFontFamily={selectedBubble?.fontFamily || "'Nanum Pen Script', cursive"}
         defaultSideStyles={defaultSideStyles}
+        fonts={fonts}
+        onOpenFontManager={() => setIsFontModalOpen(true)}
       />
     </div>
   );

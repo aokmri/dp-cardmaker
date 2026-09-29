@@ -1167,10 +1167,45 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                   renderBatchSideSelector()
                 )}
 
+                {/* Bubble Shape (일반 / 구름 말풍선) */}
+                <div className="flex items-center justify-between text-xs pb-1">
+                  <span className="text-[11px] font-semibold text-stone-600">
+                    말풍선 모양
+                  </span>
+                  <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleStyleChange({ bubbleShape: 'default' })
+                      }
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                        (activeStyle.bubbleShape || 'default') === 'default'
+                          ? 'bg-stone-900 text-white shadow-sm'
+                          : 'text-stone-600'
+                      }`}
+                    >
+                      일반 말풍선
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleStyleChange({ bubbleShape: 'cloud' })
+                      }
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                        activeStyle.bubbleShape === 'cloud'
+                          ? 'bg-stone-900 text-white shadow-sm'
+                          : 'text-stone-600'
+                      }`}
+                    >
+                      구름 말풍선
+                    </button>
+                  </div>
+                </div>
+
                 {/* Bubble Tail ON/OFF (right before Corner Radius) */}
                 <div className="flex items-center justify-between text-xs pb-1">
                   <span className="text-[11px] font-semibold text-stone-600">
-                    말풍선 꼬리 (뾰족 모서리)
+                    말풍선 꼬리
                   </span>
                   <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
                     <button

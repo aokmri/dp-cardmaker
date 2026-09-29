@@ -17,6 +17,7 @@ import {
 } from '../types';
 import { DEFAULT_META_FONT_FAMILY, INITIAL_SIDE_STYLES } from '../data/presetFonts';
 import { useRasterizedPaperTexture } from '../utils/paperTexture';
+import { CloudBubbleBackground } from '../utils/cloudBubble';
 
 type SideKey = 'left' | 'center' | 'right';
 
@@ -532,22 +533,46 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
 
             <div
               style={{
-                backgroundColor: style.bgColor,
+                backgroundColor:
+                  style.bubbleShape === 'cloud' ? 'transparent' : style.bgColor,
                 borderRadius: borderRadiusStr,
                 paddingTop: `${Math.min(style.paddingY ?? 14, 24)}px`,
                 paddingBottom: `${Math.min(style.paddingY ?? 14, 24)}px`,
                 paddingLeft: `${Math.min(style.paddingX ?? 18, 28)}px`,
                 paddingRight: `${Math.min(style.paddingX ?? 18, 28)}px`,
-                boxShadow: shadows.length > 0 ? shadows.join(', ') : 'none',
-                border: style.hasBorder
-                  ? `1px solid ${style.borderColor || '#E5DED3'}`
-                  : 'none',
+                boxShadow:
+                  style.bubbleShape === 'cloud'
+                    ? 'none'
+                    : shadows.length > 0
+                    ? shadows.join(', ')
+                    : 'none',
+                border:
+                  style.bubbleShape !== 'cloud' && style.hasBorder
+                    ? `1px solid ${style.borderColor || '#E5DED3'}`
+                    : 'none',
                 maxWidth: '100%',
               }}
-              className="transition-all duration-150"
+              className="relative transition-all duration-150"
             >
+              {style.bubbleShape === 'cloud' && (
+                <CloudBubbleBackground
+                  width={185}
+                  height={showMeta && metaTheme === 'inside' ? 88 : 66}
+                  bgColor={style.bgColor}
+                  borderRadius={r}
+                  align={side}
+                  hasTail={hasTail}
+                  hasBorder={style.hasBorder}
+                  borderColor={style.borderColor}
+                  hasShadow={style.hasShadow}
+                  hasBottomShadow={style.hasBottomShadow}
+                  bottomShadowColor={style.bottomShadowColor}
+                />
+              )}
               <div
                 style={{
+                  position: 'relative',
+                  zIndex: 1,
                   fontFamily: style.fontFamily,
                   fontSize: `${Math.min(Math.max(style.fontSize || 16, 12), 22)}px`,
                   color: style.color,

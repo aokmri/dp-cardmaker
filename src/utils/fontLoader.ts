@@ -867,6 +867,14 @@ const IGNORED_GENERIC_FONTS = new Set([
   '굴림',
   'batang',
   '바탕',
+  'apple color emoji',
+  'segoe ui emoji',
+  'segoe ui symbol',
+  'noto color emoji',
+  'twemoji mozilla',
+  'ui-sans-serif',
+  'ui-serif',
+  'ui-monospace',
 ]);
 
 export interface ClipboardReadResult {
@@ -1129,6 +1137,353 @@ export function detectFontsFromClipboard(
     rawName,
     matchedFont: matchBuiltInFont(rawName, fonts),
   }));
+}
+
+const GENERIC_FALLBACK_STACK_FONTS = new Set([
+  'pretendard',
+  'pretendard variable',
+  'noto sans kr',
+  'noto serif kr',
+  'wanted sans',
+  'wanted sans variable',
+]);
+
+function cleanFontCandidateToken(raw: string): string {
+  return raw
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/['"`]/g, '')
+    .replace(/!important/gi, '')
+    .trim();
+}
+
+function extractElementFontList(
+  el: HTMLElement,
+  classFontMap: Map<string, string[]>,
+  fonts: WebFont[]
+): string[] {
+  const list: string[] = [];
+  const add = (raw: string) => {
+    const cleaned = cleanFontCandidateToken(raw);
+    if (!cleaned) return;
+    if (IGNORED_GENERIC_FONTS.has(cleaned.toLowerCase())) return;
+    if (!list.some((item) => item.toLowerCase() === cleaned.toLowerCase())) {
+      list.push(cleaned);
+    }
+  };
+
+  // 1. Inline style attribute (regex + CSSOM)
+  const styleAttr = el.getAttribute('style');
+  if (styleAttr) {
+    const decodedStyle = styleAttr
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'");
+    const familyRegex = /font-family\s*:\s*([^;<>}]+)/gi;
+    let m: RegExpExecArray | null;
+    while ((m = familyRegex.exec(decodedStyle)) !== null) {
+      m[1].split(',').forEach(add);
+    }
+  }
+  if (el.style && el.style.fontFamily) {
+    el.style.fontFamily.split(',').forEach(add);
+  }
+
+  // 2. Explicit font attributes
+  const faceAttr = el.getAttribute('face');
+  if (faceAttr) {
+    faceAttr.split(',').forEach(add);
+  }
+  const dataFont =
+    el.getAttribute('data-font') ||
+    el.getAttribute('data-font-family') ||
+    el.getAttribute('data-font-name');
+  if (dataFont) {
+    dataFont.split(',').forEach(add);
+  }
+
+  // 3. Class names mapped from <style> or font-* utility classes
+  const className = el.getAttribute('class');
+  if (className) {
+    className.split(/\s+/).forEach((cls) => {
+      if (!cls) return;
+      const fromStyleTag = classFontMap.get(cls);
+      if (fromStyleTag) {
+        fromStyleTag.forEach(add);
+      }
+      const qlMatch = cls.match(/^(?:ql-font-|font[-_])(.+)$/i);
+      if (qlMatch && qlMatch[1]) {
+        const matched = matchBuiltInFont(qlMatch[1], fonts);
+        if (matched) add(matched.name);
+      }
+    });
+  }
+
+  return list;
+}
+
+/**
+ * Extracts the font specifically used for each '대화' (dialogue text) item from pasted clipboard HTML,
+ * ignoring fonts on nickname/date metadata or outer page containers.
+ */
+export function extractDialogueFontsFromHtml(
+  htmlData: string,
+  dialogueItems: { text: string; nickname?: string; dateText?: string }[],
+  fonts: WebFont[]
+): (DetectedFontCandidate | null)[] {
+  if (!htmlData || !htmlData.trim() || dialogueItems.length === 0) {
+    return dialogueItems.map(() => null);
+  }
+
+  if (typeof DOMParser === 'undefined') {
+    return dialogueItems.map(() => null);
+  }
+
+  try {
+    const doc = new DOMParser().parseFromString(htmlData, 'text/html');
+    const body = doc.body;
+    if (!body) return dialogueItems.map(() => null);
+
+    // Parse any <style> blocks for class -> font-family rules
+    const classFontMap = new Map<string, string[]>();
+    doc.querySelectorAll('style').forEach((styleEl) => {
+      const css = styleEl.textContent || '';
+      const ruleRegex = /\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}/g;
+      let rm: RegExpExecArray | null;
+      while ((rm = ruleRegex.exec(css)) !== null) {
+        const clsName = rm[1];
+        const bodyCss = rm[2];
+        const fm = bodyCss.match(/font-family\s*:\s*([^;}\n]+)/i);
+        if (fm && fm[1]) {
+          const parsedList = fm[1]
+            .split(',')
+            .map(cleanFontCandidateToken)
+            .filter(
+              (c) => Boolean(c) && !IGNORED_GENERIC_FONTS.has(c.toLowerCase())
+            );
+          if (parsedList.length > 0) {
+            classFontMap.set(clsName, parsedList);
+          }
+        }
+      }
+    });
+
+    interface CharFontRecord {
+      ch: string;
+      fontLevels: string[][];
+    }
+
+    const charStream: CharFontRecord[] = [];
+    const ignoredTags = new Set([
+      'SCRIPT',
+      'STYLE',
+      'NOSCRIPT',
+      'SVG',
+      'HEAD',
+      'TITLE',
+      'META',
+    ]);
+
+    const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    let currentNode = walker.nextNode();
+    while (currentNode) {
+      const textVal = currentNode.textContent || '';
+      if (textVal.trim().length > 0) {
+        let parent = currentNode.parentElement;
+        let skip = false;
+        const fontLevels: string[][] = [];
+
+        while (parent) {
+          if (ignoredTags.has(parent.tagName.toUpperCase())) {
+            skip = true;
+            break;
+          }
+          const elFonts = extractElementFontList(parent, classFontMap, fonts);
+          if (elFonts.length > 0) {
+            fontLevels.push(elFonts);
+          }
+          if (parent === body) break;
+          parent = parent.parentElement;
+        }
+
+        if (!skip) {
+          for (const ch of textVal) {
+            if (!/[\s\u200B\uFEFF]/.test(ch)) {
+              charStream.push({ ch, fontLevels });
+            }
+          }
+        }
+      }
+      currentNode = walker.nextNode();
+    }
+
+    if (charStream.length === 0) {
+      return dialogueItems.map(() => null);
+    }
+
+    const streamText = charStream.map((r) => r.ch).join('');
+    let cursor = 0;
+
+    const resolveFontFromSlice = (
+      slice: CharFontRecord[]
+    ): DetectedFontCandidate | null => {
+      if (slice.length === 0) return null;
+
+      // Check level 0 (the innermost element wrapping the dialogue text) first
+      for (let level = 0; level < 3; level++) {
+        // Collect primary candidates (index 0 in font-family) and secondary candidates at this level
+        const primaryCounts = new Map<string, { raw: string; count: number }>();
+        const allLevelCandidates: { raw: string; stackIdx: number }[] = [];
+
+        for (const rec of slice) {
+          const levelFonts = rec.fontLevels[level];
+          if (!levelFonts || levelFonts.length === 0) continue;
+
+          const primary = levelFonts[0];
+          const key = primary.toLowerCase();
+          const existing = primaryCounts.get(key);
+          if (existing) {
+            existing.count += 1;
+          } else {
+            primaryCounts.set(key, { raw: primary, count: 1 });
+          }
+
+          levelFonts.forEach((cand, stackIdx) => {
+            if (
+              !allLevelCandidates.some(
+                (c) => c.raw.toLowerCase() === cand.toLowerCase()
+              )
+            ) {
+              allLevelCandidates.push({ raw: cand, stackIdx });
+            }
+          });
+        }
+
+        if (primaryCounts.size === 0) continue;
+
+        // Sort primary candidates by character frequency descending
+        const sortedPrimaries = Array.from(primaryCounts.values()).sort(
+          (a, b) => b.count - a.count
+        );
+
+        // 1. Try matching the dominant primary font candidate(s) at this level
+        for (const p of sortedPrimaries) {
+          const matched = matchBuiltInFont(p.raw, fonts);
+          if (matched) {
+            return { rawName: p.raw, matchedFont: matched };
+          }
+        }
+
+        // 2. Try secondary candidates in the same font-family declaration (excluding generic site UI fallbacks)
+        for (const cand of allLevelCandidates) {
+          if (cand.stackIdx === 0) continue;
+          if (GENERIC_FALLBACK_STACK_FONTS.has(cand.raw.toLowerCase())) {
+            continue;
+          }
+          const matched = matchBuiltInFont(cand.raw, fonts);
+          if (matched) {
+            return { rawName: cand.raw, matchedFont: matched };
+          }
+        }
+
+        // 3. If level 0 had an explicit primary font name (even if not in built-in presets), return it as rawName
+        const topPrimary = sortedPrimaries[0].raw;
+        if (
+          level === 0 &&
+          !GENERIC_FALLBACK_STACK_FONTS.has(topPrimary.toLowerCase())
+        ) {
+          return {
+            rawName: topPrimary,
+            matchedFont: matchBuiltInFont(topPrimary, fonts),
+          };
+        }
+      }
+
+      // Final fallback if only generic stack font was present at level 0
+      for (const rec of slice) {
+        const first = rec.fontLevels[0]?.[0];
+        if (first) {
+          return {
+            rawName: first,
+            matchedFont: matchBuiltInFont(first, fonts),
+          };
+        }
+      }
+
+      return null;
+    };
+
+    const results = dialogueItems.map((item) => {
+      const compactDialogue = item.text.replace(/[\s\u200B\uFEFF]+/g, '');
+      if (!compactDialogue) return null;
+
+      let matchIdx = streamText.indexOf(compactDialogue, cursor);
+      let matchLen = compactDialogue.length;
+
+      if (matchIdx === -1) {
+        // Fallback: try matching the first non-empty line of the dialogue after cursor
+        const firstLine = item.text
+          .split('\n')
+          .map((l) => l.replace(/[\s\u200B\uFEFF]+/g, ''))
+          .find((l) => l.length > 0);
+        if (firstLine) {
+          matchIdx = streamText.indexOf(firstLine, cursor);
+          if (matchIdx !== -1) {
+            matchLen = firstLine.length;
+          }
+        }
+      }
+
+      if (matchIdx === -1) {
+        // Fallback: search from the start of streamText
+        matchIdx = streamText.indexOf(compactDialogue, 0);
+        matchLen = compactDialogue.length;
+      }
+
+      if (matchIdx !== -1) {
+        const slice = charStream.slice(matchIdx, matchIdx + matchLen);
+        cursor = matchIdx + matchLen;
+
+        // Advance cursor past nickname and dateText so next dialogue search starts cleanly after metadata
+        if (item.nickname) {
+          const compactNick = item.nickname.replace(/[\s\u200B\uFEFF]+/g, '');
+          if (compactNick) {
+            const nickIdx = streamText.indexOf(compactNick, cursor);
+            if (nickIdx !== -1 && nickIdx - cursor <= 40) {
+              cursor = nickIdx + compactNick.length;
+            }
+          }
+        }
+        if (item.dateText) {
+          const compactDate = item.dateText.replace(/[\s\u200B\uFEFF]+/g, '');
+          if (compactDate) {
+            const dateIdx = streamText.indexOf(compactDate, cursor);
+            if (dateIdx !== -1 && dateIdx - cursor <= 40) {
+              cursor = dateIdx + compactDate.length;
+            }
+          }
+        }
+
+        return resolveFontFromSlice(slice);
+      }
+
+      return null;
+    });
+
+    // If HTML had font-family declarations but individual text matching missed any item, fallback to global clipboard detection when only 1 font exists
+    if (results.every((r) => r === null)) {
+      const globalDetected = detectFontsFromClipboard(htmlData, '', fonts);
+      const nonGenericGlobal = globalDetected.filter(
+        (d) => !GENERIC_FALLBACK_STACK_FONTS.has(d.rawName.toLowerCase())
+      );
+      if (nonGenericGlobal.length === 1) {
+        return dialogueItems.map(() => nonGenericGlobal[0]);
+      }
+    }
+
+    return results;
+  } catch {
+    return dialogueItems.map(() => null);
+  }
 }
 
 /**

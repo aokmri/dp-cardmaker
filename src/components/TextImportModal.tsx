@@ -1,7 +1,22 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, FileText, ArrowRightLeft, AlignLeft, Layers } from 'lucide-react';
-import { Bubble, DefaultSideStyles } from '../types';
-import { INITIAL_SIDE_STYLES } from '../data/presetFonts';
+import {
+  X,
+  FileText,
+  ArrowRightLeft,
+  AlignLeft,
+  Layers,
+  Check,
+  ClipboardPaste,
+  Sparkles,
+} from 'lucide-react';
+import { Bubble, DefaultSideStyles, WebFont } from '../types';
+import { INITIAL_SIDE_STYLES, PRESET_FONTS } from '../data/presetFonts';
+import {
+  DetectedFontCandidate,
+  extractDialogueFontsFromHtml,
+  requestClipboardWithPermission,
+} from '../utils/fontLoader';
+import { FontSelectDropdown } from './FontSelectDropdown';
 
 interface TextImportModalProps {
   isOpen: boolean;
@@ -9,6 +24,8 @@ interface TextImportModalProps {
   onImport: (newBubbles: Bubble[], mode: 'replace' | 'append') => void;
   defaultFontFamily: string;
   defaultSideStyles?: DefaultSideStyles;
+  fonts?: WebFont[];
+  onOpenFontManager?: () => void;
 }
 
 interface ParsedNoteItem {
@@ -217,13 +234,116 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
   onImport,
   defaultFontFamily,
   defaultSideStyles = INITIAL_SIDE_STYLES,
+  fonts = PRESET_FONTS,
+  onOpenFontManager,
 }) => {
   const [inputText, setInputText] = useState('');
+  const [pastedHtml, setPastedHtml] = useState('');
   const [alignmentRule, setAlignmentRule] = useState<'alternate' | 'left' | 'right'>('alternate');
   const [importMode, setImportMode] = useState<'replace' | 'append'>('replace');
   const [nicknameSideMap, setNicknameSideMap] = useState<Record<string, 'left' | 'right'>>({});
+  const [userCustomFontMap, setUserCustomFontMap] = useState<Record<string, string>>({});
+  const [userCustomSideFontMap, setUserCustomSideFontMap] = useState<
+    Partial<Record<'left' | 'right', string>>
+  >({});
+  const [disabledAutoFontNickMap, setDisabledAutoFontNickMap] = useState<
+    Record<string, boolean>
+  >({});
+  const [disabledAutoFontSideMap, setDisabledAutoFontSideMap] = useState<
+    Partial<Record<'left' | 'right', boolean>>
+  >({});
+
+  const resetModalTextAndState = () => {
+    setInputText('');
+    setPastedHtml('');
+    setNicknameSideMap({});
+    setUserCustomFontMap({});
+    setUserCustomSideFontMap({});
+    setDisabledAutoFontNickMap({});
+    setDisabledAutoFontSideMap({});
+  };
+
+  const handleCloseWithReset = () => {
+    resetModalTextAndState();
+    onClose();
+  };
 
   const parsed = useMemo(() => parseMailboxNotes(inputText), [inputText]);
+
+  // Extract the font specifically used for each '대화' (dialogue) from pasted HTML
+  const dialogueFonts = useMemo(
+    () => extractDialogueFontsFromHtml(pastedHtml, parsed.items, fonts),
+    [pastedHtml, parsed.items, fonts]
+  );
+
+  // Aggregate detected '대화' font per nickname
+  const detectedFontByNick = useMemo(() => {
+    const map: Record<string, DetectedFontCandidate | null> = {};
+    for (const nick of parsed.nicknames) {
+      const matchedCounts = new Map<
+        string,
+        { candidate: DetectedFontCandidate; count: number }
+      >();
+      let firstRawCandidate: DetectedFontCandidate | null = null;
+
+      parsed.items.forEach((item, idx) => {
+        if (item.nickname !== nick) return;
+        const det = dialogueFonts[idx];
+        if (!det) return;
+        if (!firstRawCandidate) {
+          firstRawCandidate = det;
+        }
+        if (det.matchedFont) {
+          const key = det.matchedFont.id;
+          const existing = matchedCounts.get(key);
+          if (existing) {
+            existing.count += 1;
+          } else {
+            matchedCounts.set(key, { candidate: det, count: 1 });
+          }
+        }
+      });
+
+      if (matchedCounts.size > 0) {
+        const best = Array.from(matchedCounts.values()).sort(
+          (a, b) => b.count - a.count
+        )[0];
+        map[nick] = best.candidate;
+      } else {
+        map[nick] = firstRawCandidate;
+      }
+    }
+    return map;
+  }, [parsed.nicknames, parsed.items, dialogueFonts]);
+
+  // Aggregate detected '대화' font per side ('left' | 'right') for plain text / side fallback
+  const detectedFontBySide = useMemo(() => {
+    const result: Record<'left' | 'right', DetectedFontCandidate | null> = {
+      left: null,
+      right: null,
+    };
+
+    parsed.items.forEach((item, idx) => {
+      let side: 'left' | 'right' = 'left';
+      if (alignmentRule === 'alternate') {
+        if (item.nickname && nicknameSideMap[item.nickname]) {
+          side = nicknameSideMap[item.nickname];
+        } else {
+          side = idx % 2 === 0 ? 'left' : 'right';
+        }
+      } else if (alignmentRule === 'right') {
+        side = 'right';
+      }
+
+      const det = dialogueFonts[idx];
+      if (!det) return;
+      if (!result[side] || (!result[side]?.matchedFont && det.matchedFont)) {
+        result[side] = det;
+      }
+    });
+
+    return result;
+  }, [parsed.items, dialogueFonts, alignmentRule, nicknameSideMap]);
 
   // Initialize default left/right mapping whenever detected nicknames change
   useEffect(() => {
@@ -242,6 +362,83 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
   }, [parsed.nicknames]);
 
   if (!isOpen) return null;
+
+  const getFontDisplayName = (family: string) => {
+    const matched = fonts.find(
+      (f) => f.family.toLowerCase() === family.toLowerCase()
+    );
+    if (matched) return matched.name;
+    return family.replace(/['"]/g, '').split(',')[0].trim();
+  };
+
+  const handleTextareaPaste = async (
+    e: React.ClipboardEvent<HTMLTextAreaElement>
+  ) => {
+    const htmlData = e.clipboardData.getData('text/html');
+    const textarea = e.currentTarget;
+    const isReplacingAll =
+      !inputText.trim() ||
+      (textarea.selectionStart === 0 &&
+        textarea.selectionEnd === inputText.length);
+
+    if (isReplacingAll) {
+      setUserCustomFontMap({});
+      setUserCustomSideFontMap({});
+      setDisabledAutoFontNickMap({});
+      setDisabledAutoFontSideMap({});
+    }
+
+    if (htmlData) {
+      setPastedHtml((prev) =>
+        isReplacingAll || !prev ? htmlData : `${prev}\n${htmlData}`
+      );
+      return;
+    }
+
+    if (navigator.clipboard && 'read' in navigator.clipboard) {
+      try {
+        let asyncHtml = '';
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          if (item.types.includes('text/html')) {
+            const blob = await item.getType('text/html');
+            asyncHtml += await blob.text();
+          }
+        }
+        if (asyncHtml) {
+          setPastedHtml((prev) =>
+            isReplacingAll || !prev ? asyncHtml : `${prev}\n${asyncHtml}`
+          );
+        }
+      } catch {
+        // Ignore clipboard read permission errors
+      }
+    }
+  };
+
+  const handleClipboardPasteButton = async () => {
+    const res = await requestClipboardWithPermission();
+    if (res.status === 'ok' && (res.plainText || res.htmlData)) {
+      let plain = res.plainText;
+      if (!plain && res.htmlData && typeof DOMParser !== 'undefined') {
+        try {
+          const doc = new DOMParser().parseFromString(
+            res.htmlData,
+            'text/html'
+          );
+          plain = doc.body?.innerText || doc.body?.textContent || '';
+        } catch {
+          // ignore
+        }
+      }
+      setUserCustomFontMap({});
+      setUserCustomSideFontMap({});
+      setDisabledAutoFontNickMap({});
+      setDisabledAutoFontSideMap({});
+      setInputText(plain);
+      setPastedHtml(res.htmlData || '');
+    }
+  };
 
   const handleSelectNicknameSide = (targetNick: string, side: 'left' | 'right') => {
     setNicknameSideMap((prev) => {
@@ -289,6 +486,39 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
       }
 
       const sideStyle = defaultSideStyles[align] || defaultSideStyles.left;
+      const isNickAutoDisabled = item.nickname
+        ? Boolean(disabledAutoFontNickMap[item.nickname])
+        : false;
+      const isSideAutoDisabled =
+        align === 'left' || align === 'right'
+          ? Boolean(disabledAutoFontSideMap[align])
+          : false;
+      const isAutoDisabled = item.nickname
+        ? isNickAutoDisabled
+        : isSideAutoDisabled;
+
+      const itemDetectedFont = !isAutoDisabled
+        ? dialogueFonts[index]?.matchedFont?.family
+        : undefined;
+      const nickDetectedFont =
+        !isAutoDisabled && item.nickname
+          ? detectedFontByNick[item.nickname]?.matchedFont?.family
+          : undefined;
+      const sideDetectedFont =
+        !isAutoDisabled && (align === 'left' || align === 'right')
+          ? detectedFontBySide[align]?.matchedFont?.family
+          : undefined;
+
+      const resolvedFontFamily =
+        (item.nickname ? userCustomFontMap[item.nickname] : undefined) ||
+        (align === 'left' || align === 'right'
+          ? userCustomSideFontMap[align]
+          : undefined) ||
+        itemDetectedFont ||
+        nickDetectedFont ||
+        sideDetectedFont ||
+        sideStyle.fontFamily ||
+        defaultFontFamily;
 
       const bubble: Bubble = {
         id: `bubble-${Date.now()}-${index}`,
@@ -304,7 +534,7 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
         align,
         x: align === 'left' ? 8 : 45,
         y: startY + index * spacing,
-        fontFamily: sideStyle.fontFamily || defaultFontFamily,
+        fontFamily: resolvedFontFamily,
         fontSize: sideStyle.fontSize,
         color: sideStyle.color,
         bgColor: sideStyle.bgColor,
@@ -314,6 +544,7 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
         isUnderline: sideStyle.isUnderline,
         textAlign: sideStyle.textAlign,
         borderRadius: sideStyle.borderRadius,
+        bubbleShape: sideStyle.bubbleShape || 'default',
         hasTail: sideStyle.hasTail,
         cornerStyle: 'directional',
         paddingY: sideStyle.paddingY,
@@ -343,7 +574,7 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
     >
       <div
         id="text-import-modal"
-        className="w-full max-w-xl rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl transition-all"
+        className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl transition-all"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-stone-100 pb-3">
@@ -357,8 +588,9 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
           </div>
           <button
             type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+            onClick={handleCloseWithReset}
+            title="텍스트 초기화 및 닫기"
+            className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
@@ -366,33 +598,78 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
 
         <div className="mt-4 space-y-4">
           <div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <label className="text-xs font-semibold text-stone-700">
                 쪽지 텍스트 붙여넣기
               </label>
-              {parsed.items.length > 0 && (
-                <span className="text-[11px] font-medium text-amber-800">
-                  대화 {parsed.items.length}개 추출됨
-                </span>
+              <div className="flex items-center gap-2">
+                {parsed.items.length > 0 && (
+                  <span className="text-[11px] font-medium text-amber-800">
+                    대화 {parsed.items.length}개 추출됨
+                  </span>
+                )}
+                {inputText.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={resetModalTextAndState}
+                    className="inline-flex items-center gap-0.5 rounded-lg border border-stone-200 bg-stone-50 px-2 py-1 text-[11px] font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
+                    title="텍스트박스 내용 초기화"
+                  >
+                    <X className="h-3 w-3" />
+                    <span>초기화</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleClipboardPasteButton}
+                  className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50/80 px-2 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-100 transition cursor-pointer"
+                  title="클립보드에서 텍스트와 대화 글꼴 정보를 함께 불러옵니다"
+                >
+                  <ClipboardPaste className="h-3 w-3 text-amber-700" />
+                  <span>클립보드 붙여넣기</span>
+                </button>
+              </div>
+            </div>
+            <div className="relative mt-1.5">
+              <textarea
+                rows={8}
+                placeholder={`이세계 우체통에서 나눈 쪽지를 복사하여 붙여넣으면 말풍선과 '대화' 글꼴이 함께 변환됩니다.\n예:\n대화1\n닉네임A\n•\nn세 n월 n일\n대화2\n닉네임B\n•\nn세 n월 n일`}
+                value={inputText}
+                onPaste={handleTextareaPaste}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setInputText(val);
+                  if (!val.trim()) {
+                    setPastedHtml('');
+                    setUserCustomFontMap({});
+                    setUserCustomSideFontMap({});
+                    setDisabledAutoFontNickMap({});
+                    setDisabledAutoFontSideMap({});
+                  }
+                }}
+                className="w-full rounded-xl border border-stone-200 p-3.5 pr-9 text-sm text-stone-800 placeholder-stone-400 focus:border-stone-900 focus:outline-none"
+              />
+              {inputText.length > 0 && (
+                <button
+                  type="button"
+                  onClick={resetModalTextAndState}
+                  title="텍스트박스 내용 초기화"
+                  className="absolute top-2.5 right-2.5 rounded-md p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               )}
             </div>
-            <textarea
-              rows={9}
-              placeholder={`이세계 우체통에서 나눈 쪽지를 복사하여 붙여넣으면 말풍선으로 변환됩니다.\n예:\n대화1\n닉네임A\n•\nn세 n월 n일\n대화2\n닉네임B\n•\nn세 n월 n일`}
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-stone-200 p-3.5 text-sm text-stone-800 placeholder-stone-400 focus:border-stone-900 focus:outline-none"
-            />
           </div>
 
-          {/* Detected Nicknames Left/Right Selector */}
-          {alignmentRule === 'alternate' && parsed.nicknames.length > 0 && (
-            <div className="rounded-xl border border-stone-200 bg-stone-50/90 p-3 space-y-2">
+          {/* Detected Nicknames Left/Right Selector + Detected Dialogue Font underneath each position */}
+          {parsed.nicknames.length > 0 && (
+            <div className="rounded-xl border border-stone-200 bg-stone-50/90 p-3 space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-stone-700">
-                  닉네임별 말풍선 위치 선택
+                  닉네임별 말풍선 위치 및 대화 글꼴
                 </span>
-                {parsed.nicknames.length >= 2 && (
+                {alignmentRule === 'alternate' && parsed.nicknames.length >= 2 && (
                   <button
                     type="button"
                     onClick={handleSwapSides}
@@ -406,42 +683,312 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {parsed.nicknames.map((nick) => {
-                  const currentSide = nicknameSideMap[nick] || 'left';
+                  const currentSide =
+                    alignmentRule === 'left'
+                      ? 'left'
+                      : alignmentRule === 'right'
+                      ? 'right'
+                      : nicknameSideMap[nick] || 'left';
+                  const detectedInfo = detectedFontByNick[nick] || null;
+                  const sideDefaultFont =
+                    (defaultSideStyles[currentSide] || defaultSideStyles.left)
+                      .fontFamily || defaultFontFamily;
+                  const customFontFamily = userCustomFontMap[nick];
+                  const isAutoFontDisabled = Boolean(
+                    disabledAutoFontNickMap[nick]
+                  );
+                  const effectiveFontFamily =
+                    customFontFamily ||
+                    (!isAutoFontDisabled
+                      ? detectedInfo?.matchedFont?.family
+                      : undefined) ||
+                    sideDefaultFont;
+                  const effectiveFontName =
+                    getFontDisplayName(effectiveFontFamily);
+                  const isCurrentlyUsingDetectedFont =
+                    Boolean(detectedInfo?.matchedFont) &&
+                    !isAutoFontDisabled &&
+                    (!customFontFamily ||
+                      customFontFamily === detectedInfo?.matchedFont?.family);
+
                   return (
                     <div
                       key={nick}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2"
+                      className="flex flex-col gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2.5 shadow-2xs"
                     >
-                      <span className="truncate text-xs font-semibold text-stone-800">
-                        {nick}
-                      </span>
-                      <div className="flex items-center rounded-lg bg-stone-100 p-0.5 text-[11px] shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleSelectNicknameSide(nick, 'left')}
-                          className={`rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
-                            currentSide === 'left'
-                              ? 'bg-stone-900 text-white shadow-2xs'
-                              : 'text-stone-600 hover:text-stone-900'
-                          }`}
-                        >
-                          왼쪽
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectNicknameSide(nick, 'right')}
-                          className={`rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
-                            currentSide === 'right'
-                              ? 'bg-stone-900 text-white shadow-2xs'
-                              : 'text-stone-600 hover:text-stone-900'
-                          }`}
-                        >
-                          오른쪽
-                        </button>
+                      {/* Top row: Nickname & Bubble Position (왼쪽 / 오른쪽) */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-xs font-semibold text-stone-800">
+                          {nick}
+                        </span>
+                        <div className="flex items-center rounded-lg bg-stone-100 p-0.5 text-[11px] shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (alignmentRule !== 'alternate') {
+                                setAlignmentRule('alternate');
+                              }
+                              handleSelectNicknameSide(nick, 'left');
+                            }}
+                            className={`rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
+                              currentSide === 'left'
+                                ? 'bg-stone-900 text-white shadow-2xs'
+                                : 'text-stone-600 hover:text-stone-900'
+                            }`}
+                          >
+                            왼쪽
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (alignmentRule !== 'alternate') {
+                                setAlignmentRule('alternate');
+                              }
+                              handleSelectNicknameSide(nick, 'right');
+                            }}
+                            className={`rounded-md px-2.5 py-1 font-medium transition cursor-pointer ${
+                              currentSide === 'right'
+                                ? 'bg-stone-900 text-white shadow-2xs'
+                                : 'text-stone-600 hover:text-stone-900'
+                            }`}
+                          >
+                            오른쪽
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Bottom row right underneath bubble position: Detected Dialogue Font & Selector */}
+                      <div className="space-y-1.5 border-t border-stone-100 pt-2">
+                        <div className="flex items-center justify-between gap-1.5 text-[11px]">
+                          <span className="text-stone-500 shrink-0 font-medium">
+                            대화 글꼴
+                          </span>
+                          {detectedInfo?.matchedFont ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isCurrentlyUsingDetectedFont) {
+                                  // Clicking '자동적용' reverts to the existing default font for this side
+                                  setDisabledAutoFontNickMap((prev) => ({
+                                    ...prev,
+                                    [nick]: true,
+                                  }));
+                                  setUserCustomFontMap((prev) => {
+                                    const next = { ...prev };
+                                    delete next[nick];
+                                    return next;
+                                  });
+                                } else {
+                                  // Clicking again re-applies the detected dialogue font
+                                  setDisabledAutoFontNickMap((prev) => ({
+                                    ...prev,
+                                    [nick]: false,
+                                  }));
+                                  setUserCustomFontMap((prev) => {
+                                    const next = { ...prev };
+                                    delete next[nick];
+                                    return next;
+                                  });
+                                }
+                              }}
+                              className={`inline-flex items-center gap-1 min-w-0 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold transition cursor-pointer ${
+                                isCurrentlyUsingDetectedFont
+                                  ? 'border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100'
+                                  : 'border-stone-200 bg-stone-100 text-stone-600 hover:bg-stone-200/70'
+                              }`}
+                              title={
+                                isCurrentlyUsingDetectedFont
+                                  ? '클릭 시 기존 기본 글꼴로 돌아갑니다'
+                                  : `클릭 시 감지된 '${detectedInfo.matchedFont.name}' 글꼴을 다시 적용합니다`
+                              }
+                            >
+                              {isCurrentlyUsingDetectedFont && (
+                                <Check className="h-3 w-3 shrink-0 text-amber-700" />
+                              )}
+                              <span
+                                className="truncate"
+                                style={{
+                                  fontFamily: detectedInfo.matchedFont.family,
+                                }}
+                              >
+                                {detectedInfo.matchedFont.name}
+                              </span>
+                              <span
+                                className={`shrink-0 text-[9px] ${
+                                  isCurrentlyUsingDetectedFont
+                                    ? 'text-amber-700'
+                                    : 'text-stone-500'
+                                }`}
+                              >
+                                {isCurrentlyUsingDetectedFont
+                                  ? '(자동적용)'
+                                  : '(기존글꼴)'}
+                              </span>
+                            </button>
+                          ) : detectedInfo?.rawName ? (
+                            <div className="flex items-center gap-1 min-w-0">
+                              <span
+                                className="truncate rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-600"
+                                title={`파악된 대화 글꼴: ${detectedInfo.rawName} (미내장)`}
+                              >
+                                {detectedInfo.rawName} (미내장)
+                              </span>
+                              {onOpenFontManager && (
+                                <button
+                                  type="button"
+                                  onClick={onOpenFontManager}
+                                  className="shrink-0 inline-flex items-center gap-0.5 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 hover:bg-amber-100 cursor-pointer"
+                                >
+                                  <Sparkles className="h-2.5 w-2.5" />
+                                  <span>추가</span>
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <span
+                              className="truncate text-[10px] text-stone-500"
+                              style={{ fontFamily: effectiveFontFamily }}
+                            >
+                              {effectiveFontName}
+                            </span>
+                          )}
+                        </div>
+
+                        <FontSelectDropdown
+                          fonts={fonts}
+                          value={effectiveFontFamily}
+                          onChange={(family) =>
+                            setUserCustomFontMap((prev) => ({
+                              ...prev,
+                              [nick]: family,
+                            }))
+                          }
+                        />
                       </div>
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Fallback Position Font Display when plain text paragraphs (no nicknames) are entered */}
+          {parsed.nicknames.length === 0 && parsed.items.length > 0 && (
+            <div className="rounded-xl border border-stone-200 bg-stone-50/90 p-3 space-y-2">
+              <span className="text-xs font-semibold text-stone-700 block">
+                말풍선 위치별 대화 글꼴
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {(['left', 'right'] as const)
+                  .filter((side) =>
+                    alignmentRule === 'left' ? side === 'left' : true
+                  )
+                  .map((side) => {
+                    const detectedInfo = detectedFontBySide[side];
+                    const sideDefaultFont =
+                      (defaultSideStyles[side] || defaultSideStyles.left)
+                        .fontFamily || defaultFontFamily;
+                    const customFont = userCustomSideFontMap[side];
+                    const isAutoFontDisabled = Boolean(
+                      disabledAutoFontSideMap[side]
+                    );
+                    const effectiveFontFamily =
+                      customFont ||
+                      (!isAutoFontDisabled
+                        ? detectedInfo?.matchedFont?.family
+                        : undefined) ||
+                      sideDefaultFont;
+                    const effectiveFontName =
+                      getFontDisplayName(effectiveFontFamily);
+                    const isCurrentlyUsingDetectedFont =
+                      Boolean(detectedInfo?.matchedFont) &&
+                      !isAutoFontDisabled &&
+                      (!customFont ||
+                        customFont === detectedInfo?.matchedFont?.family);
+
+                    return (
+                      <div
+                        key={side}
+                        className="flex flex-col gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2.5 shadow-2xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-stone-800">
+                            {side === 'left' ? '왼쪽 말풍선' : '오른쪽 말풍선'}
+                          </span>
+                          {detectedInfo?.matchedFont ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isCurrentlyUsingDetectedFont) {
+                                  setDisabledAutoFontSideMap((prev) => ({
+                                    ...prev,
+                                    [side]: true,
+                                  }));
+                                  setUserCustomSideFontMap((prev) => {
+                                    const next = { ...prev };
+                                    delete next[side];
+                                    return next;
+                                  });
+                                } else {
+                                  setDisabledAutoFontSideMap((prev) => ({
+                                    ...prev,
+                                    [side]: false,
+                                  }));
+                                  setUserCustomSideFontMap((prev) => {
+                                    const next = { ...prev };
+                                    delete next[side];
+                                    return next;
+                                  });
+                                }
+                              }}
+                              className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold transition cursor-pointer ${
+                                isCurrentlyUsingDetectedFont
+                                  ? 'border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100'
+                                  : 'border-stone-200 bg-stone-100 text-stone-600 hover:bg-stone-200/70'
+                              }`}
+                              style={{
+                                fontFamily: detectedInfo.matchedFont.family,
+                              }}
+                              title={
+                                isCurrentlyUsingDetectedFont
+                                  ? '클릭 시 기존 기본 글꼴로 돌아갑니다'
+                                  : `클릭 시 감지된 '${detectedInfo.matchedFont.name}' 글꼴을 다시 적용합니다`
+                              }
+                            >
+                              {isCurrentlyUsingDetectedFont && (
+                                <Check className="h-3 w-3 text-amber-700" />
+                              )}
+                              {detectedInfo.matchedFont.name}{' '}
+                              {isCurrentlyUsingDetectedFont
+                                ? '(자동적용)'
+                                : '(기존글꼴)'}
+                            </button>
+                          ) : detectedInfo?.rawName ? (
+                            <span className="rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] text-stone-600">
+                              {detectedInfo.rawName} (미내장)
+                            </span>
+                          ) : (
+                            <span
+                              className="text-[10px] text-stone-500"
+                              style={{ fontFamily: effectiveFontFamily }}
+                            >
+                              {effectiveFontName}
+                            </span>
+                          )}
+                        </div>
+                        <FontSelectDropdown
+                          fonts={fonts}
+                          value={effectiveFontFamily}
+                          onChange={(family) =>
+                            setUserCustomSideFontMap((prev) => ({
+                              ...prev,
+                              [side]: family,
+                            }))
+                          }
+                        />
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           )}
