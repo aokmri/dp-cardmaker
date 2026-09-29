@@ -415,7 +415,16 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
     sampleSpeaker: string,
     sampleTime: string
   ) => {
-    const r = style.borderRadius ?? 14;
+    const isCloud = style.bubbleShape === 'cloud';
+    const r = isCloud
+      ? (style.cloudBorderRadius ?? 14)
+      : (style.borderRadius ?? 14);
+    const padY = isCloud
+      ? (style.cloudPaddingY ?? 8)
+      : (style.paddingY ?? 14);
+    const padX = isCloud
+      ? (style.cloudPaddingX ?? 24)
+      : (style.paddingX ?? 18);
     const hasTail =
       style.hasTail !== undefined ? style.hasTail : side !== 'center';
     const borderRadiusStr = !hasTail
@@ -536,10 +545,10 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
                 backgroundColor:
                   style.bubbleShape === 'cloud' ? 'transparent' : style.bgColor,
                 borderRadius: borderRadiusStr,
-                paddingTop: `${Math.min(style.paddingY ?? 14, 24)}px`,
-                paddingBottom: `${Math.min(style.paddingY ?? 14, 24)}px`,
-                paddingLeft: `${Math.min(style.paddingX ?? 18, 28)}px`,
-                paddingRight: `${Math.min(style.paddingX ?? 18, 28)}px`,
+                paddingTop: `${Math.min(padY, 24)}px`,
+                paddingBottom: `${Math.min(padY, 24)}px`,
+                paddingLeft: `${Math.min(padX, 28)}px`,
+                paddingRight: `${Math.min(padX, 28)}px`,
                 boxShadow:
                   style.bubbleShape === 'cloud'
                     ? 'none'
@@ -586,6 +595,9 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
                   lineHeight: style.lineHeight || 1.6,
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'keep-all',
+                  transform: style.textOffsetY
+                    ? `translateY(${style.textOffsetY}px)`
+                    : undefined,
                 }}
               >
                 {sampleText}

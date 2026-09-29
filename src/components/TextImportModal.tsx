@@ -544,11 +544,14 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
         isUnderline: sideStyle.isUnderline,
         textAlign: sideStyle.textAlign,
         borderRadius: sideStyle.borderRadius,
+        cloudBorderRadius: sideStyle.cloudBorderRadius ?? 14,
         bubbleShape: sideStyle.bubbleShape || 'default',
         hasTail: sideStyle.hasTail,
         cornerStyle: 'directional',
         paddingY: sideStyle.paddingY,
         paddingX: sideStyle.paddingX,
+        cloudPaddingY: sideStyle.cloudPaddingY ?? 8,
+        cloudPaddingX: sideStyle.cloudPaddingX ?? 24,
         hasShadow: sideStyle.hasShadow,
         hasBottomShadow: sideStyle.hasBottomShadow,
         bottomShadowColor: sideStyle.bottomShadowColor,
@@ -556,6 +559,7 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
         borderColor: sideStyle.borderColor,
         letterSpacing: sideStyle.letterSpacing,
         lineHeight: sideStyle.lineHeight,
+        textOffsetY: sideStyle.textOffsetY ?? 0,
         customStyleKeys: [],
       };
 

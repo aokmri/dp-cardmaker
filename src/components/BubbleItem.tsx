@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
-import { Trash2, Copy, ArrowLeftRight } from 'lucide-react';
+import { Trash2, Copy, ArrowLeftRight, GripVertical } from 'lucide-react';
 import { Bubble, WebFont } from '../types';
 import { FloatingTextToolbar } from './FloatingTextToolbar';
 import { recordSelection, getSelectionWithinBubble } from '../utils/richText';
@@ -65,6 +65,63 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     width: 140,
     height: 52,
   });
+  const [actionBarOffset, setActionBarOffset] = useState<{
+    x: number;
+    y: number;
+  }>({ x: 0, y: 0 });
+  const [isDraggingActionBar, setIsDraggingActionBar] = useState(false);
+
+  const handleActionBarPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const barEl = e.currentTarget.closest(
+      `#bubble-actions-${bubble.id}`
+    ) as HTMLElement | null;
+    const rect = barEl?.getBoundingClientRect();
+    const scale =
+      barEl && barEl.offsetWidth > 0 && rect
+        ? rect.width / barEl.offsetWidth
+        : 1;
+
+    const startClientX = e.clientX;
+    const startClientY = e.clientY;
+    const startOffsetX = actionBarOffset.x;
+    const startOffsetY = actionBarOffset.y;
+
+    setIsDraggingActionBar(true);
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const dx = (moveEvent.clientX - startClientX) / (scale || 1);
+      const dy = (moveEvent.clientY - startClientY) / (scale || 1);
+      setActionBarOffset({
+        x: Math.round(startOffsetX + dx),
+        y: Math.round(startOffsetY + dy),
+      });
+    };
+
+    const handlePointerUp = () => {
+      setIsDraggingActionBar(false);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+
+      // Consume the trailing click event so releasing outside the bubble doesn't deselect it
+      const suppressClick = (clickEvent: MouseEvent) => {
+        clickEvent.stopPropagation();
+        window.removeEventListener('click', suppressClick, true);
+      };
+      window.addEventListener('click', suppressClick, true);
+      window.setTimeout(() => {
+        window.removeEventListener('click', suppressClick, true);
+      }, 80);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+  };
 
   const clearLongPressTimer = useCallback(() => {
     if (longPressTimerRef.current !== null) {
@@ -186,8 +243,12 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
       const requiredInnerWidth = Math.max(tightTextWidth, metaWidth);
       if (requiredInnerWidth > 0 && requiredInnerWidth < elClientWidth - 1) {
         const borderExtra = bubble.hasBorder ? 2 : 0;
+        const activePadX =
+          bubble.bubbleShape === 'cloud'
+            ? (bubble.cloudPaddingX ?? 24)
+            : bubble.paddingX;
         let targetBoxWidth =
-          Math.ceil(requiredInnerWidth + 1) + bubble.paddingX * 2 + borderExtra;
+          Math.ceil(requiredInnerWidth + 1) + activePadX * 2 + borderExtra;
         boxEl.style.width = `${targetBoxWidth}px`;
 
         // Ensure shrinking never triggers an unintended extra line break
@@ -210,7 +271,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
           : { width: measuredW, height: measuredH }
       );
     }
-  }, [bubble.hasBorder, bubble.paddingX]);
+  }, [bubble.bubbleShape, bubble.cloudPaddingX, bubble.hasBorder, bubble.paddingX]);
 
   // Sync initial or updated html into contentEditable without interrupting typing, then fit width
   useLayoutEffect(() => {
@@ -233,6 +294,9 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     bubble.textAlign,
     bubble.paddingX,
     bubble.paddingY,
+    bubble.cloudPaddingX,
+    bubble.cloudPaddingY,
+    bubble.cloudBorderRadius,
     bubble.hasBorder,
     bubble.bubbleShape,
     bubble.align,
@@ -422,19 +486,29 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     display: 'block',
     outline: 'none',
     cursor: 'text',
+    transform: bubble.textOffsetY ? `translateY(${bubble.textOffsetY}px)` : undefined,
   };
 
   const isCloudShape = bubble.bubbleShape === 'cloud';
   const effectiveHasTail =
     bubble.hasTail !== undefined ? bubble.hasTail : bubble.align !== 'center';
+  const effectiveBorderRadius = isCloudShape
+    ? (bubble.cloudBorderRadius ?? 14)
+    : (bubble.borderRadius ?? 14);
+  const effectivePaddingY = isCloudShape
+    ? (bubble.cloudPaddingY ?? 8)
+    : bubble.paddingY;
+  const effectivePaddingX = isCloudShape
+    ? (bubble.cloudPaddingX ?? 24)
+    : bubble.paddingX;
 
   const bubbleContainerStyle: React.CSSProperties = {
     backgroundColor: isCloudShape ? 'transparent' : bubble.bgColor,
-    borderRadius: isCloudShape ? `${bubble.borderRadius ?? 14}px` : getBorderRadius(),
-    paddingTop: `${bubble.paddingY}px`,
-    paddingBottom: `${bubble.paddingY}px`,
-    paddingLeft: `${bubble.paddingX}px`,
-    paddingRight: `${bubble.paddingX}px`,
+    borderRadius: isCloudShape ? `${effectiveBorderRadius}px` : getBorderRadius(),
+    paddingTop: `${effectivePaddingY}px`,
+    paddingBottom: `${effectivePaddingY}px`,
+    paddingLeft: `${effectivePaddingX}px`,
+    paddingRight: `${effectivePaddingX}px`,
     boxShadow: isCloudShape ? 'none' : getBoxShadow(),
     border:
       !isCloudShape && bubble.hasBorder
@@ -484,9 +558,30 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
       {isSelected && !isExporting && (
         <div
           id={`bubble-actions-${bubble.id}`}
-          className="absolute -top-10 left-0 z-40 flex items-center gap-1 whitespace-nowrap rounded-lg border border-stone-200 bg-white/95 px-2 py-1 shadow-md backdrop-blur-xs text-xs text-stone-600 print:hidden"
+          style={{
+            transform: `translate(${actionBarOffset.x}px, ${actionBarOffset.y}px)`,
+          }}
+          className={`absolute -top-10 left-0 z-50 flex items-center gap-1 whitespace-nowrap rounded-lg border bg-white/95 px-1.5 py-1 shadow-md backdrop-blur-xs text-xs text-stone-600 print:hidden ${
+            isDraggingActionBar
+              ? 'border-amber-500 ring-2 ring-amber-400/40 shadow-lg'
+              : 'border-stone-200'
+          }`}
           onClick={(e) => e.stopPropagation()}
         >
+          <div
+            role="button"
+            tabIndex={0}
+            onPointerDown={handleActionBarPointerDown}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              setActionBarOffset({ x: 0, y: 0 });
+            }}
+            className="flex items-center justify-center rounded px-0.5 py-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 active:text-stone-900 cursor-grab active:cursor-grabbing touch-none select-none transition"
+            title="드래그하여 보조옵션 바 위치 이동 (더블클릭 시 기본 위치로 초기화)"
+          >
+            <GripVertical className="h-3.5 w-3.5 shrink-0" />
+          </div>
+          <div className="h-3 w-[1px] shrink-0 bg-stone-200" />
           <button
             type="button"
             onClick={toggleAlign}
@@ -607,7 +702,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
               width={boxSize.width}
               height={boxSize.height}
               bgColor={bubble.bgColor}
-              borderRadius={bubble.borderRadius ?? 14}
+              borderRadius={effectiveBorderRadius}
               align={bubble.align}
               hasTail={effectiveHasTail}
               hasBorder={bubble.hasBorder}

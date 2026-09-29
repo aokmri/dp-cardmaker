@@ -33,12 +33,15 @@ export interface Bubble {
   isUnderline: boolean;
   textAlign: TextAlignment;
   borderRadius: number;
+  cloudBorderRadius?: number;
   bubbleShape?: BubbleShapeType; // 'default' | 'cloud'
   hasTail?: boolean; // true: one sharp corner on left/right bubble, false: all 4 corners rounded
   cornerStyle?: 'directional' | 'rounded' | 'sharp-tl' | 'sharp-tr'; // directional: left bubble has sharp TL, right bubble has sharp TR
   fitWidth?: boolean; // wraps text tightly with equal left-right padding
   paddingY: number;
   paddingX: number;
+  cloudPaddingY?: number;
+  cloudPaddingX?: number;
   hasShadow: boolean;
   hasBottomShadow?: boolean; // 4px solid (non-blurred) bottom shadow
   bottomShadowColor?: string;
@@ -46,6 +49,7 @@ export interface Bubble {
   borderColor?: string;
   letterSpacing?: number;
   lineHeight?: number;
+  textOffsetY?: number; // vertical offset in px to fine-tune optical centering of text independently of bubble
   customStyleKeys?: (keyof BubbleSideStyle)[]; // tracks properties explicitly modified via individual editing (개별 편집)
 }
 
@@ -60,10 +64,13 @@ export const SIDE_STYLE_KEYS: (keyof BubbleSideStyle)[] = [
   'isUnderline',
   'textAlign',
   'borderRadius',
+  'cloudBorderRadius',
   'bubbleShape',
   'hasTail',
   'paddingY',
   'paddingX',
+  'cloudPaddingY',
+  'cloudPaddingX',
   'hasShadow',
   'hasBottomShadow',
   'bottomShadowColor',
@@ -71,6 +78,7 @@ export const SIDE_STYLE_KEYS: (keyof BubbleSideStyle)[] = [
   'borderColor',
   'letterSpacing',
   'lineHeight',
+  'textOffsetY',
   'showMeta',
   'speaker',
   'dateText',
@@ -90,10 +98,13 @@ export interface BubbleSideStyle {
   isUnderline: boolean;
   textAlign: TextAlignment;
   borderRadius: number;
+  cloudBorderRadius?: number;
   bubbleShape?: BubbleShapeType;
   hasTail?: boolean;
   paddingY: number;
   paddingX: number;
+  cloudPaddingY?: number;
+  cloudPaddingX?: number;
   hasShadow: boolean;
   hasBottomShadow?: boolean;
   bottomShadowColor?: string;
@@ -101,6 +112,7 @@ export interface BubbleSideStyle {
   borderColor?: string;
   letterSpacing?: number;
   lineHeight?: number;
+  textOffsetY?: number;
   showMeta?: boolean;
   speaker?: string;
   dateText?: string;

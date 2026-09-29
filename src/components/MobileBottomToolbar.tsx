@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sliders,
   Type,
@@ -112,6 +112,15 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<'single' | 'batch'>('single');
   const [expandedSliderKey, setExpandedSliderKey] = useState<string | null>(null);
+
+  // Automatically switch to single edit mode and sync batch side when a bubble is tapped on canvas
+  useEffect(() => {
+    if (selectedBubble) {
+      setEditMode('single');
+      onActiveBatchSideChange(selectedBubble.align);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBubble?.id]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -232,13 +241,30 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
         isUnderline: selectedBubble.isUnderline,
         textAlign: selectedBubble.textAlign,
         borderRadius: selectedBubble.borderRadius,
+        cloudBorderRadius: selectedBubble.cloudBorderRadius ?? 14,
+        bubbleShape: selectedBubble.bubbleShape || 'default',
+        hasTail:
+          selectedBubble.hasTail !== undefined
+            ? selectedBubble.hasTail
+            : selectedBubble.align !== 'center',
         paddingY: selectedBubble.paddingY,
         paddingX: selectedBubble.paddingX,
+        cloudPaddingY: selectedBubble.cloudPaddingY ?? 8,
+        cloudPaddingX: selectedBubble.cloudPaddingX ?? 24,
         hasShadow: selectedBubble.hasShadow,
+        hasBottomShadow: Boolean(selectedBubble.hasBottomShadow),
+        bottomShadowColor: selectedBubble.bottomShadowColor || '#b9a98e',
         hasBorder: selectedBubble.hasBorder,
         borderColor: selectedBubble.borderColor || '#E5DED3',
         letterSpacing: selectedBubble.letterSpacing ?? 0,
         lineHeight: selectedBubble.lineHeight ?? 1.5,
+        textOffsetY: selectedBubble.textOffsetY ?? 0,
+        showMeta: selectedBubble.showMeta,
+        speaker: selectedBubble.speaker,
+        dateText: selectedBubble.dateText,
+        metaTheme: selectedBubble.metaTheme,
+        metaFontFamily: selectedBubble.metaFontFamily,
+        metaColor: selectedBubble.metaColor,
       }
     : defaultSideStyles[activeBatchSide];
 
@@ -335,13 +361,27 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
       isUnderline: style.isUnderline,
       textAlign: style.textAlign,
       borderRadius: style.borderRadius,
+      cloudBorderRadius: style.cloudBorderRadius ?? 14,
+      bubbleShape: style.bubbleShape || 'default',
+      hasTail: style.hasTail ?? (selectedBubble.align !== 'center'),
       paddingY: style.paddingY,
       paddingX: style.paddingX,
+      cloudPaddingY: style.cloudPaddingY ?? 8,
+      cloudPaddingX: style.cloudPaddingX ?? 24,
       hasShadow: style.hasShadow,
+      hasBottomShadow: Boolean(style.hasBottomShadow),
+      bottomShadowColor: style.bottomShadowColor || '#b9a98e',
       hasBorder: style.hasBorder,
       borderColor: style.borderColor,
       letterSpacing: style.letterSpacing,
       lineHeight: style.lineHeight,
+      textOffsetY: style.textOffsetY ?? 0,
+      showMeta: style.showMeta ?? false,
+      metaTheme: style.metaTheme || 'inside',
+      metaFontFamily: style.metaFontFamily || DEFAULT_META_FONT_FAMILY,
+      metaColor:
+        style.metaColor ||
+        (selectedBubble.align === 'right' ? '#cdaf77' : '#777674'),
       ...(cleanedHtml !== undefined ? { html: cleanedHtml } : {}),
       customStyleKeys: [],
     });
@@ -357,7 +397,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
   const handleSaveSelectedAsDefault = () => {
     if (!selectedBubble) return;
     const side = selectedBubble.align;
-    onUpdateSideStyle(side, {
+    const patch: Partial<BubbleSideStyle> = {
       fontFamily: selectedBubble.fontFamily,
       fontSize: selectedBubble.fontSize,
       color: selectedBubble.color,
@@ -368,14 +408,32 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
       isUnderline: selectedBubble.isUnderline,
       textAlign: selectedBubble.textAlign,
       borderRadius: selectedBubble.borderRadius,
+      cloudBorderRadius: selectedBubble.cloudBorderRadius ?? 14,
+      bubbleShape: selectedBubble.bubbleShape || 'default',
+      hasTail:
+        selectedBubble.hasTail !== undefined
+          ? selectedBubble.hasTail
+          : selectedBubble.align !== 'center',
       paddingY: selectedBubble.paddingY,
       paddingX: selectedBubble.paddingX,
+      cloudPaddingY: selectedBubble.cloudPaddingY ?? 8,
+      cloudPaddingX: selectedBubble.cloudPaddingX ?? 24,
       hasShadow: selectedBubble.hasShadow,
+      hasBottomShadow: Boolean(selectedBubble.hasBottomShadow),
+      bottomShadowColor: selectedBubble.bottomShadowColor || '#b9a98e',
       hasBorder: selectedBubble.hasBorder,
       borderColor: selectedBubble.borderColor,
       letterSpacing: selectedBubble.letterSpacing,
       lineHeight: selectedBubble.lineHeight,
-    });
+      textOffsetY: selectedBubble.textOffsetY ?? 0,
+      showMeta: selectedBubble.showMeta,
+      speaker: selectedBubble.speaker,
+      dateText: selectedBubble.dateText,
+      metaTheme: selectedBubble.metaTheme,
+      metaFontFamily: selectedBubble.metaFontFamily,
+      metaColor: selectedBubble.metaColor,
+    };
+    onUpdateSideStyle(side, patch);
     onUpdateBubble({ customStyleKeys: [] });
     onSaveSideStyle(side);
     const sideLabel =
@@ -580,16 +638,33 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
 
                 {/* Font Size + Style Toggles + Alignment */}
                 <div className="space-y-2 pt-1 border-t border-stone-100">
-                  {renderCollapsibleSlider({
-                    sliderKey: 'typo-fontSize',
-                    label: '글자 크기',
-                    displayValue: `${activeStyle.fontSize}px`,
-                    value: activeStyle.fontSize,
-                    min: 12,
-                    max: 44,
-                    step: 1,
-                    onChange: (fontSize) => handleStyleChange({ fontSize }),
-                  })}
+                  <div className="grid grid-cols-2 gap-2">
+                    {renderCollapsibleSlider({
+                      sliderKey: 'typo-fontSize',
+                      label: '글자 크기',
+                      displayValue: `${activeStyle.fontSize}px`,
+                      value: activeStyle.fontSize,
+                      min: 12,
+                      max: 44,
+                      step: 1,
+                      onChange: (fontSize) => handleStyleChange({ fontSize }),
+                    })}
+
+                    {renderCollapsibleSlider({
+                      sliderKey: 'typo-textOffsetY',
+                      label: '텍스트 상하 위치',
+                      displayValue:
+                        (activeStyle.textOffsetY ?? 0) > 0
+                          ? `+${activeStyle.textOffsetY}px`
+                          : `${activeStyle.textOffsetY ?? 0}px`,
+                      value: activeStyle.textOffsetY ?? 0,
+                      min: -12,
+                      max: 12,
+                      step: 0.5,
+                      onChange: (textOffsetY) =>
+                        handleStyleChange({ textOffsetY }),
+                    })}
+                  </div>
 
                   <div className="flex items-center gap-1.5">
                     <div className="grid grid-cols-4 gap-1 flex-1">
@@ -1243,36 +1318,80 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                   {renderCollapsibleSlider({
                     sliderKey: 'spacing-borderRadius',
-                    label: '모서리 둥글기',
-                    displayValue: `${activeStyle.borderRadius}px`,
-                    value: activeStyle.borderRadius,
+                    label:
+                      activeStyle.bubbleShape === 'cloud'
+                        ? '모서리 둥글기 (구름)'
+                        : '모서리 둥글기 (일반)',
+                    displayValue: `${
+                      activeStyle.bubbleShape === 'cloud'
+                        ? (activeStyle.cloudBorderRadius ?? 14)
+                        : activeStyle.borderRadius
+                    }px`,
+                    value:
+                      activeStyle.bubbleShape === 'cloud'
+                        ? (activeStyle.cloudBorderRadius ?? 14)
+                        : activeStyle.borderRadius,
                     min: 0,
                     max: 36,
                     step: 1,
-                    onChange: (borderRadius) =>
-                      handleStyleChange({ borderRadius }),
+                    onChange: (val) =>
+                      handleStyleChange(
+                        activeStyle.bubbleShape === 'cloud'
+                          ? { cloudBorderRadius: val }
+                          : { borderRadius: val }
+                      ),
                   })}
 
                   {renderCollapsibleSlider({
                     sliderKey: 'spacing-paddingY',
-                    label: '상하 여백',
-                    displayValue: `${activeStyle.paddingY}px`,
-                    value: activeStyle.paddingY,
-                    min: 6,
+                    label:
+                      activeStyle.bubbleShape === 'cloud'
+                        ? '상하 여백 (구름)'
+                        : '상하 여백 (일반)',
+                    displayValue: `${
+                      activeStyle.bubbleShape === 'cloud'
+                        ? (activeStyle.cloudPaddingY ?? 8)
+                        : activeStyle.paddingY
+                    }px`,
+                    value:
+                      activeStyle.bubbleShape === 'cloud'
+                        ? (activeStyle.cloudPaddingY ?? 8)
+                        : activeStyle.paddingY,
+                    min: 4,
                     max: 36,
                     step: 1,
-                    onChange: (paddingY) => handleStyleChange({ paddingY }),
+                    onChange: (val) =>
+                      handleStyleChange(
+                        activeStyle.bubbleShape === 'cloud'
+                          ? { cloudPaddingY: val }
+                          : { paddingY: val }
+                      ),
                   })}
 
                   {renderCollapsibleSlider({
                     sliderKey: 'spacing-paddingX',
-                    label: '좌우 여백',
-                    displayValue: `${activeStyle.paddingX}px`,
-                    value: activeStyle.paddingX,
+                    label:
+                      activeStyle.bubbleShape === 'cloud'
+                        ? '좌우 여백 (구름)'
+                        : '좌우 여백 (일반)',
+                    displayValue: `${
+                      activeStyle.bubbleShape === 'cloud'
+                        ? (activeStyle.cloudPaddingX ?? 24)
+                        : activeStyle.paddingX
+                    }px`,
+                    value:
+                      activeStyle.bubbleShape === 'cloud'
+                        ? (activeStyle.cloudPaddingX ?? 24)
+                        : activeStyle.paddingX,
                     min: 10,
                     max: 48,
                     step: 1,
-                    onChange: (paddingX) => handleStyleChange({ paddingX }),
+                    onChange: (val) =>
+                      handleStyleChange(
+                        activeStyle.bubbleShape === 'cloud'
+                          ? { cloudPaddingX: val }
+                          : { paddingX: val }
+                      ),
                   })}
 
                   {renderCollapsibleSlider({
@@ -1376,8 +1495,8 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                     })}
                 </div>
 
-                {/* Quick Font & Bg Color for activeBatchSide */}
-                <div className="space-y-2 pt-1 border-t border-stone-100">
+                {/* Quick Font & Bg Color & Shape/Tail for activeBatchSide */}
+                <div className="space-y-2.5 pt-1 border-t border-stone-100">
                   <FontSelectDropdown
                     fonts={fonts}
                     value={defaultSideStyles[activeBatchSide].fontFamily}
@@ -1385,17 +1504,111 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                       onUpdateSideStyle(activeBatchSide, { fontFamily })
                     }
                   />
-                  {renderCollapsibleSlider({
-                    sliderKey: 'batch-fontSize',
-                    label: '글자 크기',
-                    displayValue: `${defaultSideStyles[activeBatchSide].fontSize}px`,
-                    value: defaultSideStyles[activeBatchSide].fontSize,
-                    min: 12,
-                    max: 44,
-                    step: 1,
-                    onChange: (fontSize) =>
-                      onUpdateSideStyle(activeBatchSide, { fontSize }),
-                  })}
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[11px] font-semibold text-stone-600">
+                      말풍선 모양
+                    </span>
+                    <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateSideStyle(activeBatchSide, {
+                            bubbleShape: 'default',
+                          })
+                        }
+                        className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                          (defaultSideStyles[activeBatchSide].bubbleShape ||
+                            'default') === 'default'
+                            ? 'bg-stone-900 text-white shadow-sm'
+                            : 'text-stone-600'
+                        }`}
+                      >
+                        일반 말풍선
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateSideStyle(activeBatchSide, {
+                            bubbleShape: 'cloud',
+                          })
+                        }
+                        className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                          defaultSideStyles[activeBatchSide].bubbleShape ===
+                          'cloud'
+                            ? 'bg-stone-900 text-white shadow-sm'
+                            : 'text-stone-600'
+                        }`}
+                      >
+                        구름 말풍선
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[11px] font-semibold text-stone-600">
+                      말풍선 꼬리
+                    </span>
+                    <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateSideStyle(activeBatchSide, { hasTail: true })
+                        }
+                        className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                          (defaultSideStyles[activeBatchSide].hasTail ??
+                            activeBatchSide !== 'center')
+                            ? 'bg-stone-900 text-white shadow-sm'
+                            : 'text-stone-600'
+                        }`}
+                      >
+                        ON
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateSideStyle(activeBatchSide, { hasTail: false })
+                        }
+                        className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                          !(defaultSideStyles[activeBatchSide].hasTail ??
+                            activeBatchSide !== 'center')
+                            ? 'bg-stone-900 text-white shadow-sm'
+                            : 'text-stone-600'
+                        }`}
+                      >
+                        OFF
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {renderCollapsibleSlider({
+                      sliderKey: 'batch-fontSize',
+                      label: '글자 크기',
+                      displayValue: `${defaultSideStyles[activeBatchSide].fontSize}px`,
+                      value: defaultSideStyles[activeBatchSide].fontSize,
+                      min: 12,
+                      max: 44,
+                      step: 1,
+                      onChange: (fontSize) =>
+                        onUpdateSideStyle(activeBatchSide, { fontSize }),
+                    })}
+
+                    {renderCollapsibleSlider({
+                      sliderKey: 'batch-textOffsetY',
+                      label: '텍스트 상하 위치',
+                      displayValue:
+                        (defaultSideStyles[activeBatchSide].textOffsetY ?? 0) > 0
+                          ? `+${defaultSideStyles[activeBatchSide].textOffsetY}px`
+                          : `${defaultSideStyles[activeBatchSide].textOffsetY ?? 0}px`,
+                      value: defaultSideStyles[activeBatchSide].textOffsetY ?? 0,
+                      min: -12,
+                      max: 12,
+                      step: 0.5,
+                      onChange: (textOffsetY) =>
+                        onUpdateSideStyle(activeBatchSide, { textOffsetY }),
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1433,7 +1646,13 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                       <button
                         type="button"
                         onClick={() => onApplyTheme('legacy')}
-                        className="flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-left text-[11px] font-semibold text-stone-800 active:bg-stone-100"
+                        className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left text-[11px] font-semibold transition ${
+                          canvasConfig.bgColor.toLowerCase() === '#faf9f8' &&
+                          canvasConfig.paperTexture === 'paper' &&
+                          !defaultSideStyles.left.hasBottomShadow
+                            ? 'border-stone-900 bg-stone-900 text-white shadow-2xs'
+                            : 'border-stone-200 bg-white text-stone-800 active:bg-stone-100'
+                        }`}
                       >
                         <span
                           className="h-3 w-3 shrink-0 rounded-full border border-stone-300"
@@ -1444,7 +1663,13 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                       <button
                         type="button"
                         onClick={() => onApplyTheme('default-white')}
-                        className="flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-left text-[11px] font-semibold text-stone-800 active:bg-stone-100"
+                        className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left text-[11px] font-semibold transition ${
+                          canvasConfig.bgColor.toLowerCase() === '#faf9f8' &&
+                          canvasConfig.paperTexture === 'none' &&
+                          Boolean(defaultSideStyles.left.hasBottomShadow)
+                            ? 'border-stone-900 bg-stone-900 text-white shadow-2xs'
+                            : 'border-stone-200 bg-white text-stone-800 active:bg-stone-100'
+                        }`}
                       >
                         <span
                           className="h-3 w-3 shrink-0 rounded-full border border-[#6b5843]"
@@ -1458,7 +1683,11 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                       <button
                         type="button"
                         onClick={() => onApplyTheme('default-dark')}
-                        className="flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-left text-[11px] font-semibold text-stone-800 active:bg-stone-100"
+                        className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left text-[11px] font-semibold transition ${
+                          canvasConfig.bgColor.toLowerCase() === '#1b150c'
+                            ? 'border-stone-900 bg-stone-900 text-white shadow-2xs'
+                            : 'border-stone-200 bg-white text-stone-800 active:bg-stone-100'
+                        }`}
                       >
                         <span
                           className="h-3 w-3 shrink-0 rounded-full border border-stone-700"

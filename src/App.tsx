@@ -218,11 +218,14 @@ export default function App() {
       isUnderline: sideStyle.isUnderline,
       textAlign: sideStyle.textAlign,
       borderRadius: sideStyle.borderRadius,
+      cloudBorderRadius: sideStyle.cloudBorderRadius ?? 14,
       bubbleShape: sideStyle.bubbleShape || 'default',
       hasTail: sideStyle.hasTail,
       cornerStyle: 'directional',
       paddingY: sideStyle.paddingY,
       paddingX: sideStyle.paddingX,
+      cloudPaddingY: sideStyle.cloudPaddingY ?? 8,
+      cloudPaddingX: sideStyle.cloudPaddingX ?? 24,
       hasShadow: sideStyle.hasShadow,
       hasBottomShadow: sideStyle.hasBottomShadow,
       bottomShadowColor: sideStyle.bottomShadowColor,
@@ -230,6 +233,7 @@ export default function App() {
       borderColor: sideStyle.borderColor,
       letterSpacing: sideStyle.letterSpacing,
       lineHeight: sideStyle.lineHeight,
+      textOffsetY: sideStyle.textOffsetY ?? 0,
       showMeta: sideStyle.showMeta ?? false,
       speaker: sideStyle.speaker || '',
       dateText: sideStyle.dateText || '',
@@ -252,22 +256,27 @@ export default function App() {
     explicitUpdatedKeys?: (keyof BubbleSideStyle)[]
   ): Bubble => {
     const customSet = new Set(bubble.customStyleKeys || []);
+    const explicitSet = new Set(explicitUpdatedKeys || []);
     const nonCustomUpdates: Partial<Bubble> = {};
     for (const key of SIDE_STYLE_KEYS) {
-      if (customSet.has(key)) continue;
+      if (customSet.has(key) && !explicitSet.has(key)) continue;
       // Keep each bubble's extracted speaker/dateText unless speaker/dateText was explicitly edited in batch settings (or bubble has none)
       if (
         (key === 'speaker' || key === 'dateText') &&
-        (!explicitUpdatedKeys || !explicitUpdatedKeys.includes(key)) &&
+        !explicitSet.has(key) &&
         Boolean(bubble[key]?.trim())
       ) {
         continue;
       }
       (nonCustomUpdates as Record<string, unknown>)[key] = sideStyle[key];
+      if (explicitSet.has(key)) {
+        customSet.delete(key);
+      }
     }
     return {
       ...bubble,
       ...nonCustomUpdates,
+      customStyleKeys: Array.from(customSet),
     };
   };
 
@@ -297,18 +306,21 @@ export default function App() {
 
   // Save the current side style as the persistent default
   const handleSaveSideStyle = (side: 'left' | 'right' | 'center') => {
-    const current = defaultSideStyles[side];
-    setSavedSideStyles((prev) => {
-      const nextSaved = {
-        ...prev,
-        [side]: { ...current },
-      };
-      try {
-        localStorage.setItem('manhwa_default_side_styles', JSON.stringify(nextSaved));
-      } catch {
-        // ignore
-      }
-      return nextSaved;
+    setDefaultSideStyles((latestDefault) => {
+      const current = latestDefault[side];
+      setSavedSideStyles((prev) => {
+        const nextSaved = {
+          ...prev,
+          [side]: { ...current },
+        };
+        try {
+          localStorage.setItem('manhwa_default_side_styles_v5', JSON.stringify(nextSaved));
+        } catch {
+          // ignore
+        }
+        return nextSaved;
+      });
+      return latestDefault;
     });
   };
 
