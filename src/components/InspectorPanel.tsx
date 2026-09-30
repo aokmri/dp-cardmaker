@@ -17,6 +17,7 @@ import {
   Upload,
   Image as ImageIcon,
   RotateCcw,
+  Save,
   ChevronDown,
 } from 'lucide-react';
 import { Bubble, BubbleSideStyle, CanvasConfig, CardThemeId, DefaultSideStyles, WebFont } from '../types';
@@ -26,8 +27,11 @@ import {
   getMetaOrderedFonts,
 } from '../data/presetFonts';
 import {
+  clearSavedSelection,
   formatSelection,
   getSelectionWithinBubble,
+  hasInlineTextFormatting,
+  stripAllInlineFormattingFromHtml,
   stripInlineFontFamilyFromHtml,
 } from '../utils/richText';
 import { BatchSideStylePanel } from './BatchSideStylePanel';
@@ -91,6 +95,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   };
 
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [activeBatchSide, setActiveBatchSide] = useState<'left' | 'center' | 'right'>('left');
 
   // Collapsible category states for Single Edit (개별 편집)
   const [isSingleTextOpen, setIsSingleTextOpen] = useState(true);
@@ -113,8 +118,13 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
   const handleApplyPresetToSelected = (side: 'left' | 'right' | 'center') => {
     if (!selectedBubble) return;
+    clearSavedSelection();
     const style = defaultSideStyles[side] || defaultSideStyles.left;
-    const cleanedHtml = stripInlineFontFamilyFromHtml(selectedBubble.html);
+    const cleanedHtml = stripAllInlineFormattingFromHtml(selectedBubble.html);
+    const domEl = document.getElementById(`bubble-text-${selectedBubble.id}`);
+    if (domEl && cleanedHtml !== undefined) {
+      domEl.innerHTML = cleanedHtml;
+    }
     onUpdateBubble({
       align: side,
       fontFamily: style.fontFamily,
@@ -249,7 +259,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
     const hasSelection = getSelectionWithinBubble(selectedBubble.id);
     if (hasSelection && !hasSelection.collapsed && hasSelection.toString().length > 0) {
       formatSelection(selectedBubble.id, { fontFamily }, (newHtml, newText) => {
-        onUpdateBubble({ fontFamily, html: newHtml, text: newText });
+        onUpdateBubble({ html: newHtml, text: newText });
       });
     } else {
       const cleanedHtml = stripInlineFontFamilyFromHtml(selectedBubble.html);
@@ -260,23 +270,91 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
     }
   };
 
-  const handleResetFontToDefault = () => {
-    if (!selectedBubble) return;
-    const sideStyle =
+  const currentBatchStyle =
+    defaultSideStyles[activeBatchSide] || defaultSideStyles.left;
+  const savedBatchStyle =
+    savedSideStyles[activeBatchSide] || savedSideStyles.left;
+  const isBatchModified =
+    JSON.stringify(currentBatchStyle) !== JSON.stringify(savedBatchStyle);
+
+  const isSingleBubbleModified = (() => {
+    if (!selectedBubble) return false;
+    const style =
       defaultSideStyles[selectedBubble.align] || defaultSideStyles.left;
-    const defaultFont = sideStyle.fontFamily;
-    const cleanedHtml = stripInlineFontFamilyFromHtml(selectedBubble.html);
-    const nextCustomKeys = (selectedBubble.customStyleKeys || []).filter(
-      (k) => k !== 'fontFamily'
+    if (hasInlineTextFormatting(selectedBubble.html, style)) {
+      return true;
+    }
+
+    const defaultShape = style.bubbleShape || 'default';
+    const bubbleShape = selectedBubble.bubbleShape || 'default';
+    const defaultHasTail =
+      style.hasTail ?? (selectedBubble.align !== 'center');
+    const bubbleHasTail =
+      selectedBubble.hasTail ?? (selectedBubble.align !== 'center');
+    const defaultShowMeta = Boolean(style.showMeta ?? false);
+    const bubbleShowMeta = Boolean(selectedBubble.showMeta ?? false);
+    const defaultMetaColor =
+      style.metaColor ||
+      (selectedBubble.align === 'right' ? '#cdaf77' : '#777674');
+    const bubbleMetaColor =
+      selectedBubble.metaColor ||
+      (selectedBubble.align === 'right' ? '#cdaf77' : '#777674');
+
+    const isSizeModified =
+      bubbleShape === 'cloud'
+        ? (selectedBubble.cloudBorderRadius ?? 14) !==
+            (style.cloudBorderRadius ?? 14) ||
+          (selectedBubble.cloudPaddingY ?? 8) !== (style.cloudPaddingY ?? 8) ||
+          (selectedBubble.cloudPaddingX ?? 24) !== (style.cloudPaddingX ?? 24)
+        : selectedBubble.borderRadius !== style.borderRadius ||
+          selectedBubble.paddingY !== style.paddingY ||
+          selectedBubble.paddingX !== style.paddingX;
+
+    const isBorderModified =
+      Boolean(selectedBubble.hasBorder) !== Boolean(style.hasBorder) ||
+      (Boolean(selectedBubble.hasBorder) &&
+        (selectedBubble.borderColor || '#E5DED3').toLowerCase() !==
+          (style.borderColor || '#E5DED3').toLowerCase());
+
+    const isBottomShadowModified =
+      Boolean(selectedBubble.hasBottomShadow) !==
+        Boolean(style.hasBottomShadow) ||
+      (Boolean(selectedBubble.hasBottomShadow) &&
+        (selectedBubble.bottomShadowColor || '#b9a98e').toLowerCase() !==
+          (style.bottomShadowColor || '#b9a98e').toLowerCase());
+
+    const isMetaModified =
+      bubbleShowMeta !== defaultShowMeta ||
+      (bubbleShowMeta &&
+        ((selectedBubble.metaTheme || 'inside') !==
+          (style.metaTheme || 'inside') ||
+          (selectedBubble.metaFontFamily || DEFAULT_META_FONT_FAMILY) !==
+            (style.metaFontFamily || DEFAULT_META_FONT_FAMILY) ||
+          bubbleMetaColor.toLowerCase() !== defaultMetaColor.toLowerCase()));
+
+    return (
+      selectedBubble.fontFamily !== style.fontFamily ||
+      selectedBubble.fontSize !== style.fontSize ||
+      selectedBubble.color.toLowerCase() !== style.color.toLowerCase() ||
+      selectedBubble.bgColor.toLowerCase() !== style.bgColor.toLowerCase() ||
+      Boolean(selectedBubble.isBold) !== Boolean(style.isBold) ||
+      Boolean(selectedBubble.isItalic) !== Boolean(style.isItalic) ||
+      Boolean(selectedBubble.isStrikethrough) !==
+        Boolean(style.isStrikethrough) ||
+      Boolean(selectedBubble.isUnderline) !== Boolean(style.isUnderline) ||
+      selectedBubble.textAlign !== style.textAlign ||
+      bubbleShape !== defaultShape ||
+      bubbleHasTail !== defaultHasTail ||
+      isSizeModified ||
+      Boolean(selectedBubble.hasShadow) !== Boolean(style.hasShadow) ||
+      isBottomShadowModified ||
+      isBorderModified ||
+      (selectedBubble.letterSpacing ?? 0.5) !== (style.letterSpacing ?? 0.5) ||
+      (selectedBubble.lineHeight ?? 1.5) !== (style.lineHeight ?? 1.5) ||
+      (selectedBubble.textOffsetY ?? 0) !== (style.textOffsetY ?? 0) ||
+      isMetaModified
     );
-    onUpdateBubble({
-      fontFamily: defaultFont,
-      ...(cleanedHtml !== undefined ? { html: cleanedHtml } : {}),
-      customStyleKeys: nextCustomKeys,
-    });
-    setSaveSuccessMsg('기본 폰트로 초기화되었습니다.');
-    setTimeout(() => setSaveSuccessMsg(null), 2000);
-  };
+  })();
 
   return (
     <aside
@@ -333,13 +411,80 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         </div>
       </div>
 
+      {/* Action Header for Batch Edit */}
+      {activeTab === 'batch' && (
+        <div className="flex items-center justify-between border-b border-stone-100 px-5 py-2.5 bg-stone-50/30">
+          <span className="text-xs font-semibold text-stone-700 truncate">
+            {activeBatchSide === 'left'
+              ? '왼쪽 기본서식'
+              : activeBatchSide === 'center'
+              ? '중앙 기본서식'
+              : '오른쪽 기본서식'}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              id="btn-save-side-style"
+              disabled={!isBatchModified}
+              onClick={() => {
+                onSaveSideStyle(activeBatchSide);
+                const sideName =
+                  activeBatchSide === 'left'
+                    ? '왼쪽'
+                    : activeBatchSide === 'center'
+                    ? '중앙'
+                    : '오른쪽';
+                setSaveSuccessMsg(`${sideName} 기본서식이 저장되었습니다.`);
+                setTimeout(() => setSaveSuccessMsg(null), 2200);
+              }}
+              title="저장"
+              className={`flex items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition ${
+                isBatchModified
+                  ? 'border-stone-900 bg-stone-900 text-white shadow-2xs hover:bg-stone-800 cursor-pointer'
+                  : 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed'
+              }`}
+            >
+              <Save
+                className={`h-3 w-3 shrink-0 ${
+                  isBatchModified ? 'text-amber-300' : 'text-stone-400'
+                }`}
+              />
+              <span>저장</span>
+            </button>
+            <button
+              type="button"
+              id="btn-revert-side-style"
+              disabled={!isBatchModified}
+              onClick={() => {
+                onRevertSideStyle(activeBatchSide);
+                const sideName =
+                  activeBatchSide === 'left'
+                    ? '왼쪽'
+                    : activeBatchSide === 'center'
+                    ? '중앙'
+                    : '오른쪽';
+                setSaveSuccessMsg(
+                  `${sideName} 서식을 이전 저장 상태로 되돌렸습니다.`
+                );
+                setTimeout(() => setSaveSuccessMsg(null), 2200);
+              }}
+              title="원래대로"
+              className={`flex items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition ${
+                isBatchModified
+                  ? 'border-stone-300 bg-white text-stone-800 hover:bg-stone-100 shadow-2xs cursor-pointer'
+                  : 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed'
+              }`}
+            >
+              <RotateCcw className="h-3 w-3 shrink-0" />
+              <span>원래대로</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Action Header for Single Selection */}
       {activeTab === 'single' && selectedBubble && (
         <div className="flex items-center justify-between border-b border-stone-100 px-5 py-2.5 bg-stone-50/30">
-          <span className="text-xs font-semibold text-stone-700 truncate max-w-[170px]">
-            {selectedBubble.align === 'left' ? '좌측 말풍선' : selectedBubble.align === 'center' ? '중앙 말풍선' : '우측 말풍선'}
-            {selectedBubble.speaker ? ` (${selectedBubble.speaker})` : ''}
-          </span>
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -358,6 +503,20 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
+          <button
+            type="button"
+            disabled={!isSingleBubbleModified}
+            onClick={() => handleApplyPresetToSelected(selectedBubble.align)}
+            title="현재 말풍선 위치의 기본서식으로 초기화"
+            className={`flex items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-semibold transition ${
+              isSingleBubbleModified
+                ? 'border-stone-300 bg-white text-stone-700 shadow-2xs hover:bg-stone-100 hover:border-stone-400 hover:text-stone-900 cursor-pointer'
+                : 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed'
+            }`}
+          >
+            <RotateCcw className="h-3 w-3 shrink-0" />
+            <span>서식 초기화</span>
+          </button>
         </div>
       )}
 
@@ -382,14 +541,18 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             onCopySideStyle={onCopySideStyle}
             fonts={fonts}
             onOpenFontManager={onOpenFontManager}
-            onActiveSideChange={onActiveBatchSideChange}
+            activeSide={activeBatchSide}
+            onActiveSideChange={(side) => {
+              setActiveBatchSide(side);
+              onActiveBatchSideChange?.(side);
+            }}
           />
         </div>
 
         {activeTab === 'single' ? (
           selectedBubble ? (
             <>
-              {/* 0. Bubble Alignment + Quick Preset Reset & Save as Default (Compact spacing) */}
+              {/* 0. Bubble Alignment + Save as Default (Compact spacing) */}
               <div className="space-y-1.5">
                 <div className="grid grid-cols-3 gap-1.5">
                   <button
@@ -432,30 +595,6 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     <span className="hidden sm:inline">우측 배치</span>
                   </button>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleApplyPresetToSelected(selectedBubble.align)}
-                  title="현재 말풍선 위치의 기본서식으로 초기화"
-                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-stone-200 bg-white py-1.5 px-2.5 text-xs font-semibold text-stone-700 shadow-2xs hover:bg-stone-100 hover:border-stone-300 hover:text-stone-900 transition cursor-pointer"
-                >
-                  <RotateCcw className="h-3.5 w-3.5 shrink-0 text-stone-600" />
-                  <span>서식 초기화</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSaveCurrentAsDefault(selectedBubble.align)}
-                  className="w-full text-center text-[11px] text-stone-600 hover:text-stone-900 underline underline-offset-2 py-0.5 whitespace-nowrap truncate cursor-pointer"
-                >
-                  현재 스타일을{' '}
-                  {selectedBubble.align === 'left'
-                    ? '왼쪽'
-                    : selectedBubble.align === 'center'
-                    ? '중앙'
-                    : '오른쪽'}{' '}
-                  기본서식으로 저장
-                </button>
               </div>
 
               {/* 1. Direct Text Content Editor */}
@@ -500,21 +639,10 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
                 {isSingleTextOpen && (
                   <div className="p-3.5 space-y-4 border-t border-stone-100">
-                    {/* Font Selector with "기본폰트로 초기화" Button */}
+                    {/* Font Selector */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between gap-1">
                         <label className="text-xs font-semibold text-stone-600">폰트</label>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={handleResetFontToDefault}
-                            className="flex items-center gap-1 rounded border border-stone-200 bg-stone-50 px-1.5 py-0.5 text-[11px] font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
-                            title="현재 위치의 기본 폰트로 초기화"
-                          >
-                            <RotateCcw className="h-3 w-3" />
-                            기본폰트로 초기화
-                          </button>
-                        </div>
                       </div>
 
                       <FontSelectDropdown
@@ -537,7 +665,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     </div>
 
                     {/* Text Formatting Bar: B, I, S(취소표), U, Align */}
-                    <div className="space-y-2">
+                    <div className="space-y-2 pt-3.5 border-t border-stone-200">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-semibold text-stone-600">글자 서식 & 정렬</label>
                       </div>
@@ -658,7 +786,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     </div>
 
                     {/* Font Size */}
-                    <div className="space-y-1">
+                    <div className="space-y-1 pt-3.5 border-t border-stone-200">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-semibold text-stone-600">글자 크기</span>
                       </div>
@@ -678,7 +806,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     </div>
 
                     {/* Text Color */}
-                    <div>
+                    <div className="pt-3.5 border-t border-stone-200">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-semibold text-stone-600">글자 색상</label>
                       </div>
@@ -857,7 +985,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     </div>
 
                     {/* Bubble Background Color */}
-                    <div>
+                    <div className="pt-3.5 border-t border-stone-200">
                       <label className="text-xs font-semibold text-stone-600">말풍선 배경색</label>
                       <div className="mt-1.5 flex items-center gap-2">
                         <input
@@ -1327,6 +1455,21 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Save Current Bubble Style as Default (Moved to very bottom of single edit) */}
+              <button
+                type="button"
+                onClick={() => handleSaveCurrentAsDefault(selectedBubble.align)}
+                className="w-full text-center text-[11px] text-stone-600 hover:text-stone-900 underline underline-offset-2 py-1 whitespace-nowrap truncate cursor-pointer"
+              >
+                현재 스타일을{' '}
+                {selectedBubble.align === 'left'
+                  ? '왼쪽'
+                  : selectedBubble.align === 'center'
+                  ? '중앙'
+                  : '오른쪽'}{' '}
+                기본서식으로 저장
+              </button>
             </>
           ) : (
             /* Empty state when in single mode and no bubble is selected */
@@ -1637,7 +1780,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   </div>
 
                   {/* Paper Texture */}
-                  <div className="space-y-3">
+                  <div className="space-y-3 pt-4 border-t border-stone-200">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-semibold text-stone-700">종이 질감 효과</label>
                     </div>
@@ -1685,7 +1828,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     </label>
 
                     {canvasConfig.showDividers && (
-                      <div className="space-y-2.5 pt-2 border-t border-stone-100">
+                      <div className="space-y-2.5 pt-1">
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-stone-600">선 스타일</span>
                           <div className="flex gap-1">
@@ -1742,11 +1885,9 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 onClick={() => setIsCanvasHeaderFooterOpen((prev) => !prev)}
                 className="flex w-full items-center justify-between bg-stone-50/90 px-3.5 py-2.5 text-left hover:bg-stone-100/80 transition cursor-pointer"
               >
-                <div>
-                  <span className="text-xs font-bold text-stone-800">
-                    머릿말 & 꼬리말
-                  </span>
-                </div>
+                <span className="text-xs font-bold text-stone-800">
+                  머릿말 & 꼬리말
+                </span>
                 <ChevronDown
                   className={`h-4 w-4 text-stone-500 transition-transform duration-200 ${
                     isCanvasHeaderFooterOpen ? 'rotate-180' : ''
@@ -1774,7 +1915,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       </label>
 
                       {canvasConfig.showHeader && (
-                        <div className="space-y-2.5 pt-2 border-t border-stone-100">
+                        <div className="space-y-2.5 pt-1">
                           <input
                             type="text"
                             value={canvasConfig.headerText}
@@ -1892,7 +2033,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       </label>
 
                       {canvasConfig.showFooter && (
-                        <div className="space-y-2.5 pt-2 border-t border-stone-100">
+                        <div className="space-y-2.5 pt-1">
                           <input
                             type="text"
                             value={canvasConfig.footerText}
@@ -1997,14 +2138,14 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               )}
             </div>
 
-            {/* Category 3: 크기조절 (대화 너비 / 카드 크기 조절 / 말풍선 간 간격) */}
+            {/* Category 3: 배경 크기 (대화 너비 / 가로 넓이 / 세로 높이 / 말풍선 간 간격) */}
             <div className="rounded-xl border border-stone-200 bg-white overflow-hidden shadow-2xs">
               <button
                 type="button"
                 onClick={() => setIsCanvasSizeOpen((prev) => !prev)}
                 className="flex w-full items-center justify-between bg-stone-50/90 px-3.5 py-2.5 text-left hover:bg-stone-100/80 transition cursor-pointer"
               >
-                <span className="text-xs font-bold text-stone-800">크기조절</span>
+                <span className="text-xs font-bold text-stone-800">배경 크기</span>
                 <ChevronDown
                   className={`h-4 w-4 text-stone-500 transition-transform duration-200 ${
                     isCanvasSizeOpen ? 'rotate-180' : ''
@@ -2018,7 +2159,6 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   <div className="space-y-2">
                     <label className="block text-xs font-semibold text-stone-700">대화 너비</label>
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-stone-600">영역 너비 비율</span>
                       <input
                         type="range"
                         min="60"
@@ -2027,17 +2167,17 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                         onChange={(e) =>
                           onUpdateCanvasConfig({ dividerWidth: Number(e.target.value) })
                         }
-                        className="w-28 accent-stone-900"
+                        className="w-full accent-stone-900"
                       />
-                      <span className="w-8 text-right font-mono text-xs">
+                      <span className="w-12 text-right font-mono text-xs">
                         {canvasConfig.dividerWidth}%
                       </span>
                     </div>
                   </div>
 
-                  {/* Card Dimensions */}
-                  <div className="space-y-3">
-                    <label className="text-xs font-semibold text-stone-700">카드 크기 조절</label>
+                  {/* Card Width (가로 넓이) */}
+                  <div className="space-y-3 pt-4 border-t border-stone-200">
+                    <label className="block text-xs font-semibold text-stone-700">가로 넓이</label>
                     <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"
@@ -2073,9 +2213,12 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                         와이드 (880px)
                       </button>
                     </div>
+                  </div>
 
+                  {/* Card Min Height (세로 높이) */}
+                  <div className="space-y-2 pt-4 border-t border-stone-200">
+                    <label className="block text-xs font-semibold text-stone-700">세로 높이</label>
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-stone-600">최소 세로 높이</span>
                       <input
                         type="range"
                         min="400"
@@ -2085,7 +2228,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                         onChange={(e) =>
                           onUpdateCanvasConfig({ minHeight: Number(e.target.value) })
                         }
-                        className="w-32 accent-stone-900"
+                        className="w-full accent-stone-900"
                       />
                       <span className="w-12 text-right font-mono text-xs">
                         {canvasConfig.minHeight}px
@@ -2094,7 +2237,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   </div>
 
                   {/* Spacing */}
-                  <div className="space-y-2">
+                  <div className="space-y-2 pt-4 border-t border-stone-200">
                     <label className="text-xs font-semibold text-stone-700">말풍선 간 간격</label>
                     <div className="flex items-center justify-between text-xs">
                       <input

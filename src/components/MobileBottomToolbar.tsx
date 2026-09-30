@@ -41,8 +41,11 @@ import {
 import { FontSelectDropdown } from './FontSelectDropdown';
 import { FontPasteMatcher } from './FontPasteMatcher';
 import {
+  clearSavedSelection,
   formatSelection,
   getSelectionWithinBubble,
+  hasInlineTextFormatting,
+  stripAllInlineFormattingFromHtml,
   stripInlineFontFamilyFromHtml,
 } from '../utils/richText';
 
@@ -114,6 +117,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
   const [expandedSliderKey, setExpandedSliderKey] = useState<string | null>(null);
   const [isTextSpacingOpen, setIsTextSpacingOpen] = useState(false);
   const [isBubbleSizeOpen, setIsBubbleSizeOpen] = useState(false);
+  const [isBubbleStyleOpen, setIsBubbleStyleOpen] = useState(false);
   const [isCardSizeGroupOpen, setIsCardSizeGroupOpen] = useState(false);
 
   // Automatically switch to single edit mode and sync batch side when a bubble is tapped on canvas
@@ -321,6 +325,23 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
     handleStyleChange({ color });
   };
 
+  const handleFontSize = (fontSize: number) => {
+    if (isEditingSingle && selectedBubble) {
+      const hasSelection = getSelectionWithinBubble(selectedBubble.id);
+      if (
+        hasSelection &&
+        !hasSelection.collapsed &&
+        hasSelection.toString().length > 0
+      ) {
+        formatSelection(selectedBubble.id, { fontSize }, (newHtml, newText) => {
+          onUpdateBubble({ html: newHtml, text: newText });
+        });
+        return;
+      }
+    }
+    handleStyleChange({ fontSize });
+  };
+
   const handleFontFamily = (fontFamily: string) => {
     if (isEditingSingle && selectedBubble) {
       const hasSelection = getSelectionWithinBubble(selectedBubble.id);
@@ -333,7 +354,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
           selectedBubble.id,
           { fontFamily },
           (newHtml, newText) => {
-            onUpdateBubble({ fontFamily, html: newHtml, text: newText });
+            onUpdateBubble({ html: newHtml, text: newText });
           }
         );
         return;
@@ -350,9 +371,14 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
 
   const handleResetSelectedToDefault = () => {
     if (!selectedBubble) return;
+    clearSavedSelection();
     const style =
       defaultSideStyles[selectedBubble.align] || defaultSideStyles.left;
-    const cleanedHtml = stripInlineFontFamilyFromHtml(selectedBubble.html);
+    const cleanedHtml = stripAllInlineFormattingFromHtml(selectedBubble.html);
+    const domEl = document.getElementById(`bubble-text-${selectedBubble.id}`);
+    if (domEl && cleanedHtml !== undefined) {
+      domEl.innerHTML = cleanedHtml;
+    }
     onUpdateBubble({
       fontFamily: style.fontFamily,
       fontSize: style.fontSize,
@@ -451,6 +477,85 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
   const isBatchModified =
     JSON.stringify(currentBatchStyle) !== JSON.stringify(savedBatchStyle);
 
+  const isSingleBubbleModified = (() => {
+    if (!selectedBubble) return false;
+    const style =
+      defaultSideStyles[selectedBubble.align] || defaultSideStyles.left;
+    if (hasInlineTextFormatting(selectedBubble.html, style)) {
+      return true;
+    }
+
+    const defaultShape = style.bubbleShape || 'default';
+    const bubbleShape = selectedBubble.bubbleShape || 'default';
+    const defaultHasTail =
+      style.hasTail ?? (selectedBubble.align !== 'center');
+    const bubbleHasTail =
+      selectedBubble.hasTail ?? (selectedBubble.align !== 'center');
+    const defaultShowMeta = Boolean(style.showMeta ?? false);
+    const bubbleShowMeta = Boolean(selectedBubble.showMeta ?? false);
+    const defaultMetaColor =
+      style.metaColor ||
+      (selectedBubble.align === 'right' ? '#cdaf77' : '#777674');
+    const bubbleMetaColor =
+      selectedBubble.metaColor ||
+      (selectedBubble.align === 'right' ? '#cdaf77' : '#777674');
+
+    const isSizeModified =
+      bubbleShape === 'cloud'
+        ? (selectedBubble.cloudBorderRadius ?? 14) !==
+            (style.cloudBorderRadius ?? 14) ||
+          (selectedBubble.cloudPaddingY ?? 8) !== (style.cloudPaddingY ?? 8) ||
+          (selectedBubble.cloudPaddingX ?? 24) !== (style.cloudPaddingX ?? 24)
+        : selectedBubble.borderRadius !== style.borderRadius ||
+          selectedBubble.paddingY !== style.paddingY ||
+          selectedBubble.paddingX !== style.paddingX;
+
+    const isBorderModified =
+      Boolean(selectedBubble.hasBorder) !== Boolean(style.hasBorder) ||
+      (Boolean(selectedBubble.hasBorder) &&
+        (selectedBubble.borderColor || '#E5DED3').toLowerCase() !==
+          (style.borderColor || '#E5DED3').toLowerCase());
+
+    const isBottomShadowModified =
+      Boolean(selectedBubble.hasBottomShadow) !==
+        Boolean(style.hasBottomShadow) ||
+      (Boolean(selectedBubble.hasBottomShadow) &&
+        (selectedBubble.bottomShadowColor || '#b9a98e').toLowerCase() !==
+          (style.bottomShadowColor || '#b9a98e').toLowerCase());
+
+    const isMetaModified =
+      bubbleShowMeta !== defaultShowMeta ||
+      (bubbleShowMeta &&
+        ((selectedBubble.metaTheme || 'inside') !==
+          (style.metaTheme || 'inside') ||
+          (selectedBubble.metaFontFamily || DEFAULT_META_FONT_FAMILY) !==
+            (style.metaFontFamily || DEFAULT_META_FONT_FAMILY) ||
+          bubbleMetaColor.toLowerCase() !== defaultMetaColor.toLowerCase()));
+
+    return (
+      selectedBubble.fontFamily !== style.fontFamily ||
+      selectedBubble.fontSize !== style.fontSize ||
+      selectedBubble.color.toLowerCase() !== style.color.toLowerCase() ||
+      selectedBubble.bgColor.toLowerCase() !== style.bgColor.toLowerCase() ||
+      Boolean(selectedBubble.isBold) !== Boolean(style.isBold) ||
+      Boolean(selectedBubble.isItalic) !== Boolean(style.isItalic) ||
+      Boolean(selectedBubble.isStrikethrough) !==
+        Boolean(style.isStrikethrough) ||
+      Boolean(selectedBubble.isUnderline) !== Boolean(style.isUnderline) ||
+      selectedBubble.textAlign !== style.textAlign ||
+      bubbleShape !== defaultShape ||
+      bubbleHasTail !== defaultHasTail ||
+      isSizeModified ||
+      Boolean(selectedBubble.hasShadow) !== Boolean(style.hasShadow) ||
+      isBottomShadowModified ||
+      isBorderModified ||
+      (selectedBubble.letterSpacing ?? 0) !== (style.letterSpacing ?? 0) ||
+      (selectedBubble.lineHeight ?? 1.5) !== (style.lineHeight ?? 1.5) ||
+      (selectedBubble.textOffsetY ?? 0) !== (style.textOffsetY ?? 0) ||
+      isMetaModified
+    );
+  })();
+
   // Shared Target Switcher Header inside Typography/Color/Meta popovers
   const renderTargetHeader = (_title?: string) => (
     <div className="flex items-center justify-between gap-1.5 border-b border-stone-200/80 px-2.5 py-2 bg-stone-50/90">
@@ -495,7 +600,21 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
-        {!isEditingSingle && (
+        {isEditingSingle ? (
+          <button
+            type="button"
+            disabled={!isSingleBubbleModified}
+            onClick={handleResetSelectedToDefault}
+            className={`flex items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-semibold transition ${
+              isSingleBubbleModified
+                ? 'border-stone-300 bg-white text-stone-700 shadow-2xs active:bg-stone-100 cursor-pointer'
+                : 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed'
+            }`}
+          >
+            <RotateCcw className="h-3 w-3 shrink-0" />
+            <span>서식 초기화</span>
+          </button>
+        ) : (
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -547,6 +666,28 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
       </div>
     </div>
   );
+
+  const renderSingleSaveAsDefaultBanner = () => {
+    if (!isEditingSingle || !selectedBubble) return null;
+    const sideName =
+      selectedBubble.align === 'left'
+        ? '왼쪽'
+        : selectedBubble.align === 'center'
+        ? '중앙'
+        : '오른쪽';
+    return (
+      <button
+        type="button"
+        onClick={handleSaveSelectedAsDefault}
+        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50/80 py-2 px-3 text-[11px] font-semibold text-stone-700 hover:bg-stone-100 active:bg-stone-200/70 transition cursor-pointer"
+      >
+        <Save className="h-3 w-3 shrink-0 text-stone-500" />
+        <span className="truncate">
+          현재 스타일을 {sideName} 기본서식으로 저장
+        </span>
+      </button>
+    );
+  };
 
   // Side selector bar when in Batch mode
   const renderBatchSideSelector = () => (
@@ -620,39 +761,13 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
       {/* Floating Dropdown Panel (Samsung Notes style popover above the bottom bar) */}
       {openTool && (
         <div className="pointer-events-auto mx-2 mb-1.5 overflow-hidden rounded-2xl border border-stone-200/95 bg-white/98 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-2 duration-150">
-          {/* 1. TEXT POPOVER (초기화버튼 > 폰트 > 서식 > 글자크기 > 글자색상 > 글자간격) */}
+          {/* 1. TEXT POPOVER (폰트 > 서식 > 글자크기 > 글자색상 > 글자간격 > 기본서식으로 저장) */}
           {openTool === 'typography' && (
             <div className="flex flex-col max-h-[42vh]">
               {renderTargetHeader('텍스트')}
               <div className="overflow-y-auto p-3.5 space-y-3">
-                {/* 1) 초기화버튼 / 일괄 위치 선택 */}
-                {!isEditingSingle ? (
-                  renderBatchSideSelector()
-                ) : selectedBubble ? (
-                  <div className="flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50/80 p-2">
-                    <button
-                      type="button"
-                      onClick={handleResetSelectedToDefault}
-                      className="flex items-center justify-center gap-1 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-stone-700 shadow-2xs active:bg-stone-100 shrink-0"
-                    >
-                      <RotateCcw className="h-3 w-3 text-stone-600" />
-                      <span>서식 초기화</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveSelectedAsDefault}
-                      className="flex-1 text-center text-[11px] text-stone-600 underline underline-offset-2 truncate px-1"
-                    >
-                      현재 스타일을{' '}
-                      {selectedBubble.align === 'left'
-                        ? '왼쪽'
-                        : selectedBubble.align === 'center'
-                        ? '중앙'
-                        : '오른쪽'}{' '}
-                      기본서식으로 저장
-                    </button>
-                  </div>
-                ) : null}
+                {/* 1) 일괄 위치 선택 */}
+                {!isEditingSingle && renderBatchSideSelector()}
 
                 {/* 2) 폰트 */}
                 <div className="space-y-1.5">
@@ -776,7 +891,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                     min: 12,
                     max: 44,
                     step: 1,
-                    onChange: (fontSize) => handleStyleChange({ fontSize }),
+                    onChange: (fontSize) => handleFontSize(fontSize),
                   })}
                 </div>
 
@@ -881,11 +996,13 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                     </div>
                   )}
                 </div>
+
+                {isEditingSingle && renderSingleSaveAsDefaultBanner()}
               </div>
             </div>
           )}
 
-          {/* 2. BUBBLE POPOVER (일반/구름말풍선 > 말풍선배경색 > 말풍선크기 > 스타일) */}
+          {/* 2. BUBBLE POPOVER (일반/구름말풍선 > 말풍선배경색 > 말풍선크기 > 스타일 > 기본서식으로 저장) */}
           {openTool === 'color' && (
             <div className="flex flex-col max-h-[42vh]">
               {renderTargetHeader('말풍선')}
@@ -1084,110 +1201,138 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                   )}
                 </div>
 
-                {/* 4) 스타일 (말풍선 꼬리, 테두리선, 그림자) - 버튼식 */}
-                <div className="space-y-2">
-                  <span className="block text-[11px] font-semibold text-stone-600">
-                    스타일
-                  </span>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {(() => {
-                      const hasTailActive =
-                        activeStyle.hasTail ??
-                        (isEditingSingle && selectedBubble
-                          ? selectedBubble.align !== 'center'
-                          : activeBatchSide !== 'center');
-                      return (
+                {/* 4) 스타일 (말풍선 꼬리, 테두리선, 그림자) - 기본 접어두기, 버튼식 */}
+                <div className="border-b border-stone-200 pb-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsBubbleStyleOpen((prev) => !prev)}
+                    className="flex w-full items-center justify-between text-left cursor-pointer"
+                  >
+                    <span className="text-[11px] font-semibold text-stone-700">
+                      스타일
+                    </span>
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 text-stone-400 transition-transform duration-200 ${
+                        isBubbleStyleOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {isBubbleStyleOpen && (
+                    <div className="space-y-2 pt-2.5">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {(() => {
+                          const hasTailActive =
+                            activeStyle.hasTail ??
+                            (isEditingSingle && selectedBubble
+                              ? selectedBubble.align !== 'center'
+                              : activeBatchSide !== 'center');
+                          return (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleStyleChange({ hasTail: !hasTailActive })
+                              }
+                              className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
+                                hasTailActive
+                                  ? 'border-stone-900 bg-stone-900 text-white'
+                                  : 'border-stone-200 bg-white text-stone-600'
+                              }`}
+                            >
+                              말풍선 꼬리 {hasTailActive ? '켜짐' : '꺼짐'}
+                            </button>
+                          );
+                        })()}
                         <button
                           type="button"
                           onClick={() =>
-                            handleStyleChange({ hasTail: !hasTailActive })
+                            handleStyleChange({
+                              hasBorder: !activeStyle.hasBorder,
+                            })
                           }
                           className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
-                            hasTailActive
+                            activeStyle.hasBorder
                               ? 'border-stone-900 bg-stone-900 text-white'
                               : 'border-stone-200 bg-white text-stone-600'
                           }`}
                         >
-                          말풍선 꼬리 {hasTailActive ? '켜짐' : '꺼짐'}
+                          외곽선 {activeStyle.hasBorder ? '켜짐' : '꺼짐'}
                         </button>
-                      );
-                    })()}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleStyleChange({ hasBorder: !activeStyle.hasBorder })
-                      }
-                      className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
-                        activeStyle.hasBorder
-                          ? 'border-stone-900 bg-stone-900 text-white'
-                          : 'border-stone-200 bg-white text-stone-600'
-                      }`}
-                    >
-                      외곽선 {activeStyle.hasBorder ? '켜짐' : '꺼짐'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleStyleChange({ hasShadow: !activeStyle.hasShadow })
-                      }
-                      className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
-                        activeStyle.hasShadow
-                          ? 'border-stone-900 bg-stone-900 text-white'
-                          : 'border-stone-200 bg-white text-stone-600'
-                      }`}
-                    >
-                      입체그림자 {activeStyle.hasShadow ? '켜짐' : '꺼짐'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleStyleChange({
-                          hasBottomShadow: !activeStyle.hasBottomShadow,
-                        })
-                      }
-                      className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
-                        activeStyle.hasBottomShadow
-                          ? 'border-stone-900 bg-stone-900 text-white'
-                          : 'border-stone-200 bg-white text-stone-600'
-                      }`}
-                    >
-                      하단그림자 {activeStyle.hasBottomShadow ? '켜짐' : '꺼짐'}
-                    </button>
-                  </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleStyleChange({
+                              hasShadow: !activeStyle.hasShadow,
+                            })
+                          }
+                          className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
+                            activeStyle.hasShadow
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-200 bg-white text-stone-600'
+                          }`}
+                        >
+                          입체그림자 {activeStyle.hasShadow ? '켜짐' : '꺼짐'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleStyleChange({
+                              hasBottomShadow: !activeStyle.hasBottomShadow,
+                            })
+                          }
+                          className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
+                            activeStyle.hasBottomShadow
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-200 bg-white text-stone-600'
+                          }`}
+                        >
+                          하단그림자{' '}
+                          {activeStyle.hasBottomShadow ? '켜짐' : '꺼짐'}
+                        </button>
+                      </div>
 
-                  {(activeStyle.hasBorder || activeStyle.hasBottomShadow) && (
-                    <div className="flex items-center gap-3 pt-1 text-xs">
-                      {activeStyle.hasBorder && (
-                        <label className="flex items-center gap-1.5 text-[11px] text-stone-600">
-                          <span>외곽선 색</span>
-                          <input
-                            type="color"
-                            value={activeStyle.borderColor || '#E5DED3'}
-                            onChange={(e) =>
-                              handleStyleChange({ borderColor: e.target.value })
-                            }
-                            className="h-5 w-7 cursor-pointer rounded border border-stone-200 p-0.5"
-                          />
-                        </label>
-                      )}
-                      {activeStyle.hasBottomShadow && (
-                        <label className="flex items-center gap-1.5 text-[11px] text-stone-600">
-                          <span>하단그림자 색</span>
-                          <input
-                            type="color"
-                            value={activeStyle.bottomShadowColor || '#b9a98e'}
-                            onChange={(e) =>
-                              handleStyleChange({
-                                bottomShadowColor: e.target.value,
-                              })
-                            }
-                            className="h-5 w-7 cursor-pointer rounded border border-stone-200 p-0.5"
-                          />
-                        </label>
+                      {(activeStyle.hasBorder ||
+                        activeStyle.hasBottomShadow) && (
+                        <div className="flex items-center gap-3 pt-1 text-xs">
+                          {activeStyle.hasBorder && (
+                            <label className="flex items-center gap-1.5 text-[11px] text-stone-600">
+                              <span>외곽선 색</span>
+                              <input
+                                type="color"
+                                value={activeStyle.borderColor || '#E5DED3'}
+                                onChange={(e) =>
+                                  handleStyleChange({
+                                    borderColor: e.target.value,
+                                  })
+                                }
+                                className="h-5 w-7 cursor-pointer rounded border border-stone-200 p-0.5"
+                              />
+                            </label>
+                          )}
+                          {activeStyle.hasBottomShadow && (
+                            <label className="flex items-center gap-1.5 text-[11px] text-stone-600">
+                              <span>하단그림자 색</span>
+                              <input
+                                type="color"
+                                value={
+                                  activeStyle.bottomShadowColor || '#b9a98e'
+                                }
+                                onChange={(e) =>
+                                  handleStyleChange({
+                                    bottomShadowColor: e.target.value,
+                                  })
+                                }
+                                className="h-5 w-7 cursor-pointer rounded border border-stone-200 p-0.5"
+                              />
+                            </label>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
                 </div>
+
+                {isEditingSingle && renderSingleSaveAsDefaultBanner()}
               </div>
             </div>
           )}
@@ -1211,25 +1356,25 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
               <div className="overflow-y-auto p-3.5 space-y-3">
                 {selectedBubble ? (
                   <div className="space-y-2.5">
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex items-center gap-1.5 w-full">
                       {onMoveBubbleOrder && (
                         <>
                           <button
                             type="button"
                             onClick={() => onMoveBubbleOrder('up')}
                             title="위로 이동"
-                            className="flex items-center gap-0.5 rounded border border-stone-200 bg-white px-2 py-1 text-[11px] text-stone-700 active:bg-stone-100"
+                            className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-stone-200 bg-white py-1.5 text-xs font-medium text-stone-700 active:bg-stone-100"
                           >
-                            <ArrowUp className="h-3 w-3" />
+                            <ArrowUp className="h-3.5 w-3.5" />
                             위
                           </button>
                           <button
                             type="button"
                             onClick={() => onMoveBubbleOrder('down')}
                             title="아래로 이동"
-                            className="flex items-center gap-0.5 rounded border border-stone-200 bg-white px-2 py-1 text-[11px] text-stone-700 active:bg-stone-100"
+                            className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-stone-200 bg-white py-1.5 text-xs font-medium text-stone-700 active:bg-stone-100"
                           >
-                            <ArrowDown className="h-3 w-3" />
+                            <ArrowDown className="h-3.5 w-3.5" />
                             아래
                           </button>
                         </>
@@ -1238,18 +1383,18 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                         type="button"
                         onClick={onDuplicateBubble}
                         title="말풍선 복제"
-                        className="flex items-center gap-0.5 rounded border border-stone-200 bg-white px-2 py-1 text-[11px] text-stone-700 active:bg-stone-100"
+                        className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-stone-200 bg-white py-1.5 text-xs font-medium text-stone-700 active:bg-stone-100"
                       >
-                        <Copy className="h-3 w-3" />
+                        <Copy className="h-3.5 w-3.5" />
                         복제
                       </button>
                       <button
                         type="button"
                         onClick={onDeleteBubble}
                         title="말풍선 삭제"
-                        className="flex items-center gap-0.5 rounded border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] text-rose-700 active:bg-rose-100"
+                        className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-rose-200 bg-rose-50 py-1.5 text-xs font-medium text-rose-700 active:bg-rose-100"
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-3.5 w-3.5" />
                         삭제
                       </button>
                     </div>
@@ -1481,6 +1626,8 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                     </div>
                   )}
                 </div>
+
+                {isEditingSingle && renderSingleSaveAsDefaultBanner()}
               </div>
             </div>
           )}
@@ -1571,67 +1718,72 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                 )}
 
                 {/* 3x2 Card Bg Grid + Custom Color */}
-                <div className="grid grid-cols-3 gap-1.5">
-                  {COLOR_PALETTE.canvasBg.map((bg) => (
-                    <button
-                      key={bg.value}
-                      type="button"
-                      onClick={() =>
-                        onUpdateCanvasConfig({
-                          bgColor: bg.value,
-                          bgImageUrl: '',
-                        })
-                      }
-                      className={`flex items-center gap-1.5 rounded-lg border p-2 text-left text-xs transition ${
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-semibold text-stone-600 block">
+                    배경색
+                  </span>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {COLOR_PALETTE.canvasBg.map((bg) => (
+                      <button
+                        key={bg.value}
+                        type="button"
+                        onClick={() =>
+                          onUpdateCanvasConfig({
+                            bgColor: bg.value,
+                            bgImageUrl: '',
+                          })
+                        }
+                        className={`flex items-center gap-1.5 rounded-lg border p-2 text-left text-xs transition ${
+                          !canvasConfig.bgImageUrl &&
+                          canvasConfig.bgColor.toLowerCase() ===
+                            bg.value.toLowerCase()
+                            ? 'border-stone-900 ring-1 ring-stone-900 bg-stone-50'
+                            : 'border-stone-200 bg-white'
+                        }`}
+                      >
+                        <span
+                          className="h-4 w-4 shrink-0 rounded border border-stone-300"
+                          style={{ backgroundColor: bg.value }}
+                        />
+                        <span className="truncate text-[11px] text-stone-700">
+                          {bg.label}
+                        </span>
+                      </button>
+                    ))}
+
+                    <label
+                      className={`flex items-center gap-1.5 rounded-lg border p-2 text-left text-xs cursor-pointer ${
                         !canvasConfig.bgImageUrl &&
-                        canvasConfig.bgColor.toLowerCase() ===
-                          bg.value.toLowerCase()
+                        !COLOR_PALETTE.canvasBg.some(
+                          (b) =>
+                            b.value.toLowerCase() ===
+                            canvasConfig.bgColor.toLowerCase()
+                        )
                           ? 'border-stone-900 ring-1 ring-stone-900 bg-stone-50'
                           : 'border-stone-200 bg-white'
                       }`}
                     >
-                      <span
-                        className="h-4 w-4 shrink-0 rounded border border-stone-300"
-                        style={{ backgroundColor: bg.value }}
+                      <input
+                        type="color"
+                        value={
+                          canvasConfig.bgColor.startsWith('#') &&
+                          canvasConfig.bgColor.length === 7
+                            ? canvasConfig.bgColor
+                            : '#F7F7F6'
+                        }
+                        onChange={(e) =>
+                          onUpdateCanvasConfig({
+                            bgColor: e.target.value,
+                            bgImageUrl: '',
+                          })
+                        }
+                        className="h-4 w-4 shrink-0 rounded border border-stone-300 bg-transparent p-0"
                       />
                       <span className="truncate text-[11px] text-stone-700">
-                        {bg.label}
+                        색 지정
                       </span>
-                    </button>
-                  ))}
-
-                  <label
-                    className={`flex items-center gap-1.5 rounded-lg border p-2 text-left text-xs cursor-pointer ${
-                      !canvasConfig.bgImageUrl &&
-                      !COLOR_PALETTE.canvasBg.some(
-                        (b) =>
-                          b.value.toLowerCase() ===
-                          canvasConfig.bgColor.toLowerCase()
-                      )
-                        ? 'border-stone-900 ring-1 ring-stone-900 bg-stone-50'
-                        : 'border-stone-200 bg-white'
-                    }`}
-                  >
-                    <input
-                      type="color"
-                      value={
-                        canvasConfig.bgColor.startsWith('#') &&
-                        canvasConfig.bgColor.length === 7
-                          ? canvasConfig.bgColor
-                          : '#F7F7F6'
-                      }
-                      onChange={(e) =>
-                        onUpdateCanvasConfig({
-                          bgColor: e.target.value,
-                          bgImageUrl: '',
-                        })
-                      }
-                      className="h-4 w-4 shrink-0 rounded border border-stone-300 bg-transparent p-0"
-                    />
-                    <span className="truncate text-[11px] text-stone-700">
-                      색 지정
-                    </span>
-                  </label>
+                    </label>
+                  </div>
                 </div>
 
                 {/* Device Image Picker */}
@@ -1754,7 +1906,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                   </label>
 
                   {canvasConfig.showDividers && (
-                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-stone-100 text-xs">
+                    <div className="flex items-center justify-between gap-2 pt-1 text-xs">
                       <div className="flex gap-1">
                         {(['solid', 'dashed', 'double'] as const).map(
                           (style) => (
@@ -1996,88 +2148,98 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                       </div>
                     )}
                   </div>
-                </div>
+                  {/* 카드 크기 조절 (대화 너비, 카드 크기 조절, 말풍선 간격 묶어서 접기) */}
+                  <div className="space-y-2 py-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsCardSizeGroupOpen((prev) => !prev)}
+                      className="flex w-full items-center justify-between text-xs font-semibold text-stone-700 text-left cursor-pointer"
+                    >
+                      <span>카드 크기 조절</span>
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 text-stone-400 transition-transform duration-200 ${
+                          isCardSizeGroupOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </button>
 
-                {/* 카드 크기 조절 (대화 너비, 카드 크기 조절, 말풍선 간격 묶어서 접기) */}
-                <div className="border-b border-stone-200 pb-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsCardSizeGroupOpen((prev) => !prev)}
-                    className="flex w-full items-center justify-between text-left cursor-pointer py-1"
-                  >
-                    <span className="text-xs font-semibold text-stone-700">
-                      카드 크기 조절
-                    </span>
-                    <ChevronDown
-                      className={`h-3.5 w-3.5 text-stone-400 transition-transform duration-200 ${
-                        isCardSizeGroupOpen ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
+                    {isCardSizeGroupOpen && (
+                      <div className="space-y-2 pt-1.5">
+                        {/* 1) 가로 넓이 (접지 않고 제목 옆에 기본/넓게/와이드 버튼 배치) */}
+                        <div className="flex items-center justify-between gap-2 rounded-xl border border-stone-200 bg-white px-2.5 py-1.5">
+                          <span className="text-[11px] font-semibold text-stone-700 shrink-0">
+                            가로 넓이
+                          </span>
+                          <div className="grid grid-cols-3 gap-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onUpdateCanvasConfig({ width: 640 })
+                              }
+                              className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition ${
+                                canvasConfig.width === 640
+                                  ? 'border-stone-900 bg-stone-900 text-white'
+                                  : 'border-stone-200 bg-white text-stone-700'
+                              }`}
+                            >
+                              기본
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onUpdateCanvasConfig({ width: 760 })
+                              }
+                              className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition ${
+                                canvasConfig.width === 760
+                                  ? 'border-stone-900 bg-stone-900 text-white'
+                                  : 'border-stone-200 bg-white text-stone-700'
+                              }`}
+                            >
+                              넓게
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onUpdateCanvasConfig({ width: 880 })
+                              }
+                              className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition ${
+                                canvasConfig.width === 880
+                                  ? 'border-stone-900 bg-stone-900 text-white'
+                                  : 'border-stone-200 bg-white text-stone-700'
+                              }`}
+                            >
+                              와이드
+                            </button>
+                          </div>
+                        </div>
 
-                  {isCardSizeGroupOpen && (
-                    <div className="space-y-2.5 pt-2.5">
-                      <div className="grid grid-cols-3 gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => onUpdateCanvasConfig({ width: 640 })}
-                          className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
-                            canvasConfig.width === 640
-                              ? 'border-stone-900 bg-stone-900 text-white'
-                              : 'border-stone-200 bg-white text-stone-700'
-                          }`}
-                        >
-                          기본 (640px)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onUpdateCanvasConfig({ width: 760 })}
-                          className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
-                            canvasConfig.width === 760
-                              ? 'border-stone-900 bg-stone-900 text-white'
-                              : 'border-stone-200 bg-white text-stone-700'
-                          }`}
-                        >
-                          넓게 (760px)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onUpdateCanvasConfig({ width: 880 })}
-                          className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
-                            canvasConfig.width === 880
-                              ? 'border-stone-900 bg-stone-900 text-white'
-                              : 'border-stone-200 bg-white text-stone-700'
-                          }`}
-                        >
-                          와이드 (880px)
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
+                        {/* 2) 세로 길이 (접힌 슬라이드, PC의 최소세로높이와 동일 기능) */}
                         {renderCollapsibleSlider({
-                          sliderKey: 'canvas-dividerWidth',
-                          label: '대화 너비',
-                          displayValue: `${canvasConfig.dividerWidth}%`,
-                          value: canvasConfig.dividerWidth,
-                          min: 60,
-                          max: 96,
-                          step: 1,
-                          onChange: (dividerWidth) =>
-                            onUpdateCanvasConfig({ dividerWidth }),
+                          sliderKey: 'canvas-minHeight',
+                          label: '세로 길이',
+                          displayValue: `${canvasConfig.minHeight}px`,
+                          value: canvasConfig.minHeight,
+                          min: 400,
+                          max: 1200,
+                          step: 50,
+                          onChange: (minHeight) =>
+                            onUpdateCanvasConfig({ minHeight }),
                         })}
 
-                        {renderCollapsibleSlider({
-                          sliderKey: 'canvas-width',
-                          label: '카드 크기 조절',
-                          displayValue: `${canvasConfig.width}px`,
-                          value: canvasConfig.width,
-                          min: 480,
-                          max: 1080,
-                          step: 10,
-                          onChange: (width) => onUpdateCanvasConfig({ width }),
-                        })}
+                        {/* 3) 대화 너비와 말풍선 간격 가로로 나란히 배치 */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {renderCollapsibleSlider({
+                            sliderKey: 'canvas-dividerWidth',
+                            label: '대화 너비',
+                            displayValue: `${canvasConfig.dividerWidth}%`,
+                            value: canvasConfig.dividerWidth,
+                            min: 60,
+                            max: 96,
+                            step: 1,
+                            onChange: (dividerWidth) =>
+                              onUpdateCanvasConfig({ dividerWidth }),
+                          })}
 
-                        <div className="col-span-2">
                           {renderCollapsibleSlider({
                             sliderKey: 'canvas-bubbleSpacing',
                             label: '말풍선 간격',
@@ -2091,8 +2253,8 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                           })}
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

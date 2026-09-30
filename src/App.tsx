@@ -408,25 +408,38 @@ export default function App() {
           };
         }
 
-        // 3. Individual style edits in 개별편집 (record modified style keys)
+        // 3. Individual style edits in 개별편집 (record modified style keys, and remove keys that reverted to default)
         const editedStyleKeys = (
           Object.keys(updated) as (keyof Bubble)[]
         ).filter((k) =>
           SIDE_STYLE_KEYS.includes(k as keyof BubbleSideStyle)
         ) as (keyof BubbleSideStyle)[];
 
+        const mergedBubble: Bubble = { ...b, ...updated };
         if (editedStyleKeys.length > 0) {
-          const nextCustomKeys = Array.from(
+          const sideStyle =
+            defaultSideStyles[mergedBubble.align] || defaultSideStyles.left;
+          const candidateKeys = Array.from(
             new Set([...(b.customStyleKeys || []), ...editedStyleKeys])
           );
+          const nextCustomKeys = candidateKeys.filter((key) => {
+            const bVal = mergedBubble[key];
+            const sVal = sideStyle[key];
+            if (typeof bVal === 'string' && typeof sVal === 'string') {
+              return bVal.toLowerCase() !== sVal.toLowerCase();
+            }
+            if (typeof bVal === 'boolean' || typeof sVal === 'boolean') {
+              return Boolean(bVal) !== Boolean(sVal);
+            }
+            return bVal !== sVal;
+          });
           return {
-            ...b,
-            ...updated,
+            ...mergedBubble,
             customStyleKeys: nextCustomKeys,
           };
         }
 
-        return { ...b, ...updated };
+        return mergedBubble;
       })
     );
   };

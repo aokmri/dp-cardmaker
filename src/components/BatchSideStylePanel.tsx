@@ -36,6 +36,7 @@ interface BatchSideStylePanelProps {
   onCopySideStyle: (fromSide: 'left' | 'right' | 'center', toSide: 'left' | 'right' | 'center') => void;
   fonts: WebFont[];
   onOpenFontManager: () => void;
+  activeSide?: 'left' | 'center' | 'right';
   onActiveSideChange?: (side: 'left' | 'center' | 'right') => void;
 }
 
@@ -44,16 +45,16 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
   defaultSideStyles,
   savedSideStyles,
   onUpdateSideStyle,
-  onSaveSideStyle,
-  onRevertSideStyle,
   onCopySideStyle,
   fonts,
   onOpenFontManager,
+  activeSide: controlledActiveSide,
   onActiveSideChange,
 }) => {
-  const [activeSide, setActiveSideState] = useState<'left' | 'center' | 'right'>('left');
+  const [internalActiveSide, setInternalActiveSide] = useState<'left' | 'center' | 'right'>('left');
+  const activeSide = controlledActiveSide !== undefined ? controlledActiveSide : internalActiveSide;
   const setActiveSide = (side: 'left' | 'center' | 'right') => {
-    setActiveSideState(side);
+    setInternalActiveSide(side);
     onActiveSideChange?.(side);
   };
   const [notification, setNotification] = useState<string | null>(null);
@@ -84,20 +85,6 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
     setTimeout(() => {
       setNotification(null);
     }, 2500);
-  };
-
-  const handleSave = () => {
-    onSaveSideStyle(activeSide);
-    showNotification(
-      `${sideLabel(activeSide)} 기본서식이 저장되었습니다.`
-    );
-  };
-
-  const handleRevert = () => {
-    onRevertSideStyle(activeSide);
-    showNotification(
-      `${sideLabel(activeSide)} 서식을 이전 저장 상태로 되돌렸습니다.`
-    );
   };
 
   const handleCopy = (toSide: 'left' | 'center' | 'right') => {
@@ -214,45 +201,6 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
         <p className="text-[11px] text-stone-600 leading-relaxed">
           아래 서식을 조절하면 화면의 <strong>{sideLabel(activeSide)} 말풍선({sideBubbles.length}개)에 즉시 반영</strong>됩니다. 개별 편집으로 서식을 설정한 글자는 그대로 유지됩니다.
         </p>
-
-        {/* Action Buttons: 저장 / 원래대로 */}
-        <div className="grid grid-cols-2 gap-2 pt-0.5">
-          <button
-            type="button"
-            id="btn-save-side-style"
-            onClick={handleSave}
-            disabled={!isModified}
-            title="저장"
-            className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-              isModified
-                ? 'border-stone-900 bg-stone-900 text-white shadow-xs hover:bg-stone-800 active:scale-[0.99] cursor-pointer'
-                : 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed'
-            }`}
-          >
-            <Save
-              className={`h-3.5 w-3.5 shrink-0 ${
-                isModified ? 'text-amber-300' : 'text-stone-400'
-              }`}
-            />
-            <span className="hidden sm:inline">저장</span>
-          </button>
-
-          <button
-            type="button"
-            id="btn-revert-side-style"
-            onClick={handleRevert}
-            disabled={!isModified}
-            title="원래대로"
-            className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-              isModified
-                ? 'border-stone-300 bg-white text-stone-800 hover:bg-stone-100 active:scale-[0.99] shadow-2xs cursor-pointer'
-                : 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed'
-            }`}
-          >
-            <RotateCcw className="h-3.5 w-3.5 shrink-0" />
-            <span className="hidden sm:inline">원래대로</span>
-          </button>
-        </div>
       </div>
 
       {/* Category 1: 텍스트 (기본 폰트 / 글자 서식 & 정렬 / 기본 글자 크기 / 글자 색상 / 글자 간격) */}
@@ -307,7 +255,7 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
             </div>
 
             {/* 2. Text Formatting Bar: Bold, Italic, Strikethrough, Underline & Text Align */}
-            <div className="space-y-2">
+            <div className="space-y-2 pt-3.5 border-t border-stone-200">
               <label className="text-xs font-semibold text-stone-700">글자 서식 & 정렬</label>
               <div className="flex flex-wrap items-center gap-1 rounded-lg border border-stone-200 bg-stone-50/60 p-1">
                 {/* Bold */}
@@ -431,7 +379,7 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
             </div>
 
             {/* 3. Font Size */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 pt-3.5 border-t border-stone-200">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-stone-700">기본 글자 크기</span>
                 <span className="font-mono text-stone-700 font-medium">
@@ -458,7 +406,7 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
             </div>
 
             {/* 4. Text Color */}
-            <div>
+            <div className="pt-3.5 border-t border-stone-200">
               <label className="text-xs font-semibold text-stone-700">글자 색상</label>
               <div className="mt-1.5 flex items-center gap-2">
                 <input
@@ -652,7 +600,7 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
             </div>
 
             {/* Bubble Background Color */}
-            <div>
+            <div className="pt-3.5 border-t border-stone-200">
               <label className="text-xs font-semibold text-stone-700">말풍선 배경색</label>
               <div className="mt-1.5 flex items-center gap-2">
                 <input

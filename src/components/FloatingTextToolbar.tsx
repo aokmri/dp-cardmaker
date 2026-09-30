@@ -50,7 +50,7 @@ export const FloatingTextToolbar: React.FC<FloatingTextToolbarProps> = ({
 
   const handleFontFamily = (family: string) => {
     formatSelection(bubbleId, { fontFamily: family }, (newHtml, newText) => {
-      onUpdateContent(newHtml, newText, family);
+      onUpdateContent(newHtml, newText);
     });
     setShowFontPicker(false);
   };
