@@ -182,14 +182,59 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
         }
       };
 
+      const handleWindowTouchMove = (e: TouchEvent) => {
+        const current = dragStateRef.current;
+        if (!current || e.touches.length === 0) return;
+        if (e.cancelable) e.preventDefault();
+        const touch = e.touches[0];
+        const movedDist = Math.hypot(
+          touch.clientX - current.startX,
+          touch.clientY - current.startY
+        );
+        const hasMoved = current.hasMoved || movedDist > 4;
+        const { nextIndex, nextAlign } = computeTargetSlotAndAlign(
+          touch.clientX,
+          touch.clientY,
+          current
+        );
+        updateDragState({
+          ...current,
+          clientX: touch.clientX,
+          clientY: touch.clientY,
+          targetIndex: nextIndex,
+          targetAlign: nextAlign,
+          hasMoved,
+        });
+      };
+
+      const handleWindowTouchEnd = () => {
+        const current = dragStateRef.current;
+        updateDragState(null);
+        if (!current || !current.hasMoved) return;
+        if (onMoveOrCopyBubble) {
+          onMoveOrCopyBubble(
+            current.bubbleId,
+            current.targetIndex,
+            current.targetAlign,
+            current.isCopy
+          );
+        }
+      };
+
       window.addEventListener('mousemove', handleWindowMouseMove);
       window.addEventListener('mouseup', handleWindowMouseUp);
+      window.addEventListener('touchmove', handleWindowTouchMove, { passive: false });
+      window.addEventListener('touchend', handleWindowTouchEnd);
+      window.addEventListener('touchcancel', handleWindowTouchEnd);
       window.addEventListener('keydown', handleWindowKeyChange);
       window.addEventListener('keyup', handleWindowKeyChange);
 
       return () => {
         window.removeEventListener('mousemove', handleWindowMouseMove);
         window.removeEventListener('mouseup', handleWindowMouseUp);
+        window.removeEventListener('touchmove', handleWindowTouchMove);
+        window.removeEventListener('touchend', handleWindowTouchEnd);
+        window.removeEventListener('touchcancel', handleWindowTouchEnd);
         window.removeEventListener('keydown', handleWindowKeyChange);
         window.removeEventListener('keyup', handleWindowKeyChange);
       };

@@ -187,10 +187,69 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     if (!pointerStartRef.current || longPressTimerRef.current === null) return;
     const dx = e.clientX - pointerStartRef.current.x;
     const dy = e.clientY - pointerStartRef.current.y;
-    // As soon as pointer moves (> 2px) or text selection begins, treat as text drag and cancel long-press
     const sel = window.getSelection();
     if (
       Math.hypot(dx, dy) > 2 ||
+      (sel && !sel.isCollapsed && sel.toString().length > 0)
+    ) {
+      isTextDraggingRef.current = true;
+      clearLongPressTimer();
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (isExporting || e.touches.length !== 1) return;
+    const target = e.target as HTMLElement;
+    if (
+      target.closest(`#bubble-actions-${bubble.id}`) ||
+      target.closest('#floating-text-toolbar')
+    ) {
+      return;
+    }
+
+    const activeSel = window.getSelection();
+    if (activeSel && !activeSel.isCollapsed && activeSel.toString().length > 0) {
+      clearLongPressTimer();
+      return;
+    }
+
+    const touch = e.touches[0];
+    const startX = touch.clientX;
+    const startY = touch.clientY;
+    isPointerDownInBubbleRef.current = true;
+    isTextDraggingRef.current = false;
+
+    clearLongPressTimer();
+    pointerStartRef.current = { x: startX, y: startY };
+
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressTimerRef.current = null;
+      const sel = window.getSelection();
+      if (
+        isTextDraggingRef.current ||
+        (sel && !sel.isCollapsed && sel.toString().length > 0)
+      ) {
+        return;
+      }
+      if (onStartLongPressDrag) {
+        window.getSelection()?.removeAllRanges();
+        textEditableRef.current?.blur();
+        setFloatingToolbarPos(null);
+        onSelect();
+        onStartLongPressDrag(bubble.id, startX, startY, false);
+      }
+    }, 420);
+  };
+
+  const handleTouchMoveBeforeLongPress = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!pointerStartRef.current || longPressTimerRef.current === null) return;
+    if (e.touches.length === 0) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - pointerStartRef.current.x;
+    const dy = touch.clientY - pointerStartRef.current.y;
+    const sel = window.getSelection();
+    if (
+      Math.hypot(dx, dy) > 8 ||
       (sel && !sel.isCollapsed && sel.toString().length > 0)
     ) {
       isTextDraggingRef.current = true;
@@ -540,6 +599,10 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
       onMouseMove={handleMouseMoveBeforeLongPress}
       onMouseUp={clearLongPressTimer}
       onMouseLeave={clearLongPressTimer}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMoveBeforeLongPress}
+      onTouchEnd={clearLongPressTimer}
+      onTouchCancel={clearLongPressTimer}
       onClick={(e) => {
         e.stopPropagation();
         onSelect();

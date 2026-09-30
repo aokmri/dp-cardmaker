@@ -2263,7 +2263,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
       )}
 
       {/* Samsung Notes-style Horizontal Bottom Icon Bar */}
-      <div className="pointer-events-auto flex items-center justify-between gap-1 border-t border-stone-200/90 bg-white/98 px-2 py-1.5 shadow-lg backdrop-blur-md">
+      <div className="pointer-events-auto flex items-center justify-between gap-1 border-t border-stone-200/90 bg-white/98 px-2 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] shadow-lg backdrop-blur-md">
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 flex-1">
           {TOOLS.map((tool) => {
             const isActive = openTool === tool.id;

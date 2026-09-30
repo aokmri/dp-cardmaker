@@ -776,6 +776,24 @@ export default function App() {
 
       const fontEmbedCSS = await getSafeFontEmbedCSS(canvasRef.current);
 
+      const isSafari =
+        typeof navigator !== 'undefined' &&
+        /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      if (isSafari) {
+        try {
+          await toPng(canvasRef.current, {
+            quality: 0.5,
+            pixelRatio: 1,
+            fontEmbedCSS,
+            filter: (node) =>
+              typeof HTMLIFrameElement === 'undefined' ||
+              !(node instanceof HTMLIFrameElement),
+          });
+        } catch {
+          // ignore warm-up error
+        }
+      }
+
       const dataUrl = await toPng(canvasRef.current, {
         quality: 0.98,
         pixelRatio: 2.5, // 2.5x sharp resolution
@@ -789,7 +807,9 @@ export default function App() {
       const link = document.createElement('a');
       link.download = `dialogue-card-${dateStr}.png`;
       link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     } catch (err) {
       console.error('PNG export failed', err);
     } finally {
@@ -932,7 +952,9 @@ export default function App() {
       const link = document.createElement('a');
       link.href = url;
       link.download = `이체통-${sideKor}서식-${dateStr}.json`;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       console.error('Failed to export side style preset', err);
@@ -961,7 +983,9 @@ export default function App() {
       const link = document.createElement('a');
       link.href = url;
       link.download = `이체통-일괄서식-${dateStr}.json`;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       console.error('Failed to export style preset', err);
@@ -1083,7 +1107,7 @@ export default function App() {
   };
 
   return (
-    <div id="app-root" className="flex h-screen w-screen flex-col overflow-hidden bg-stone-100 font-sans">
+    <div id="app-root" className="flex h-screen supports-[height:100dvh]:h-dvh w-full flex-col overflow-hidden bg-stone-100 font-sans">
       {/* Top Main Navigation Toolbar */}
       <HeaderToolbar
         onOpenImportModal={() => setIsImportModalOpen(true)}
@@ -1106,7 +1130,7 @@ export default function App() {
           {/* Canvas Scrollable Stage */}
           <main
             id="canvas-stage"
-            className="relative flex flex-1 min-w-0 flex-col items-center justify-start overflow-y-auto overflow-x-auto p-3 pb-44 sm:p-8 md:pb-12 lg:p-12"
+            className="relative flex flex-1 min-w-0 flex-col items-center justify-start overflow-y-auto overflow-x-hidden md:overflow-x-auto p-3 pb-44 sm:p-8 md:pb-12 lg:p-12"
             onMouseDownCapture={(e) => {
               const target = e.target as HTMLElement;
               stagePointerDownInsideBubbleRef.current = Boolean(
