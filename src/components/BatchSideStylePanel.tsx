@@ -808,92 +808,111 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
 
                 {isBubbleStyleOpen && (
                   <div className="space-y-2.5 pt-3">
-                    {/* Bubble Tail Checkbox */}
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-stone-600">말풍선 꼬리</span>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(() => {
+                        const hasTailActive = Boolean(
                           currentStyle.hasTail ?? (activeSide !== 'center')
-                        )}
-                        onChange={(e) =>
+                        );
+                        return (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onUpdateSideStyle(activeSide, {
+                                hasTail: !hasTailActive,
+                              })
+                            }
+                            className={`rounded-lg border py-1.5 text-[11px] font-medium transition cursor-pointer ${
+                              hasTailActive
+                                ? 'border-stone-900 bg-stone-900 text-white'
+                                : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                            }`}
+                          >
+                            말풍선 꼬리 {hasTailActive ? '켜짐' : '꺼짐'}
+                          </button>
+                        );
+                      })()}
+
+                      <button
+                        type="button"
+                        onClick={() =>
                           onUpdateSideStyle(activeSide, {
-                            hasTail: e.target.checked,
+                            hasBorder: !currentStyle.hasBorder,
                           })
                         }
-                        className="h-4 w-4 rounded accent-stone-900"
-                      />
-                    </div>
+                        className={`rounded-lg border py-1.5 text-[11px] font-medium transition cursor-pointer ${
+                          currentStyle.hasBorder
+                            ? 'border-stone-900 bg-stone-900 text-white'
+                            : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                        }`}
+                      >
+                        외곽선 {currentStyle.hasBorder ? '켜짐' : '꺼짐'}
+                      </button>
 
-                    {/* Border Toggle */}
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-stone-600">외곽 테두리선</span>
-                      <input
-                        type="checkbox"
-                        checked={currentStyle.hasBorder}
-                        onChange={(e) =>
-                          onUpdateSideStyle(activeSide, { hasBorder: e.target.checked })
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateSideStyle(activeSide, {
+                            hasShadow: !currentStyle.hasShadow,
+                          })
                         }
-                        className="h-4 w-4 rounded accent-stone-900"
-                      />
-                    </div>
+                        className={`rounded-lg border py-1.5 text-[11px] font-medium transition cursor-pointer ${
+                          currentStyle.hasShadow
+                            ? 'border-stone-900 bg-stone-900 text-white'
+                            : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                        }`}
+                      >
+                        입체그림자 {currentStyle.hasShadow ? '켜짐' : '꺼짐'}
+                      </button>
 
-                    {currentStyle.hasBorder && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-stone-600">테두리 색상</span>
-                        <input
-                          type="color"
-                          value={currentStyle.borderColor || '#E5DED3'}
-                          onChange={(e) =>
-                            onUpdateSideStyle(activeSide, { borderColor: e.target.value })
-                          }
-                          className="h-6 w-8 cursor-pointer rounded border border-stone-200 p-0.5"
-                        />
-                      </div>
-                    )}
-
-                    {/* Shadow Toggle */}
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-stone-600">은은한 입체 그림자</span>
-                      <input
-                        type="checkbox"
-                        checked={currentStyle.hasShadow}
-                        onChange={(e) =>
-                          onUpdateSideStyle(activeSide, { hasShadow: e.target.checked })
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateSideStyle(activeSide, {
+                            hasBottomShadow: !currentStyle.hasBottomShadow,
+                          })
                         }
-                        className="h-4 w-4 rounded accent-stone-900"
-                      />
+                        className={`rounded-lg border py-1.5 text-[11px] font-medium transition cursor-pointer ${
+                          currentStyle.hasBottomShadow
+                            ? 'border-stone-900 bg-stone-900 text-white'
+                            : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                        }`}
+                      >
+                        하단그림자 {currentStyle.hasBottomShadow ? '켜짐' : '꺼짐'}
+                      </button>
                     </div>
 
-                    {/* Bottom Solid Shadow Toggle (4px) */}
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-stone-600">하단 그림자 (4px 단색)</span>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(currentStyle.hasBottomShadow)}
-                        onChange={(e) =>
-                          onUpdateSideStyle(activeSide, { hasBottomShadow: e.target.checked })
-                        }
-                        className="h-4 w-4 rounded accent-stone-900"
-                      />
-                    </div>
-
-                    {currentStyle.hasBottomShadow && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-stone-600">하단 그림자 색상</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-[10px] text-stone-500">
-                            {currentStyle.bottomShadowColor || '#b9a98e'}
-                          </span>
-                          <input
-                            type="color"
-                            value={currentStyle.bottomShadowColor || '#b9a98e'}
-                            onChange={(e) =>
-                              onUpdateSideStyle(activeSide, { bottomShadowColor: e.target.value })
-                            }
-                            className="h-6 w-8 cursor-pointer rounded border border-stone-200 p-0.5"
-                          />
-                        </div>
+                    {(currentStyle.hasBorder || currentStyle.hasBottomShadow) && (
+                      <div className="flex items-center gap-3 pt-1 text-xs">
+                        {currentStyle.hasBorder && (
+                          <label className="flex items-center gap-1.5 text-[11px] text-stone-600 cursor-pointer">
+                            <span>외곽선 색</span>
+                            <input
+                              type="color"
+                              value={currentStyle.borderColor || '#E5DED3'}
+                              onChange={(e) =>
+                                onUpdateSideStyle(activeSide, {
+                                  borderColor: e.target.value,
+                                })
+                              }
+                              className="h-5 w-7 cursor-pointer rounded border border-stone-200 p-0.5"
+                            />
+                          </label>
+                        )}
+                        {currentStyle.hasBottomShadow && (
+                          <label className="flex items-center gap-1.5 text-[11px] text-stone-600 cursor-pointer">
+                            <span>하단그림자 색</span>
+                            <input
+                              type="color"
+                              value={currentStyle.bottomShadowColor || '#b9a98e'}
+                              onChange={(e) =>
+                                onUpdateSideStyle(activeSide, {
+                                  bottomShadowColor: e.target.value,
+                                })
+                              }
+                              className="h-5 w-7 cursor-pointer rounded border border-stone-200 p-0.5"
+                            />
+                          </label>
+                        )}
                       </div>
                     )}
                   </div>

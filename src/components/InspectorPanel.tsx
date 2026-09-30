@@ -1177,87 +1177,118 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
                         {isSingleBubbleStyleOpen && (
                           <div className="space-y-2.5 pt-3">
-                            {/* Bubble Tail Checkbox */}
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-stone-600">말풍선 꼬리</span>
-                              <input
-                                type="checkbox"
-                                checked={Boolean(
-                                  selectedBubble.hasTail ?? (selectedBubble.align !== 'center')
-                                )}
-                                onChange={(e) =>
-                                  onUpdateBubble({ hasTail: e.target.checked })
-                                }
-                                className="h-4 w-4 rounded accent-stone-900"
-                              />
-                            </div>
-
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-stone-600">외곽 테두리선</span>
-                              <input
-                                type="checkbox"
-                                checked={selectedBubble.hasBorder}
-                                onChange={(e) =>
-                                  onUpdateBubble({ hasBorder: e.target.checked })
-                                }
-                                className="h-4 w-4 rounded accent-stone-900"
-                              />
-                            </div>
-
-                            {selectedBubble.hasBorder && (
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-stone-600">테두리 색상</span>
-                                <input
-                                  type="color"
-                                  value={selectedBubble.borderColor || '#E5DED3'}
-                                  onChange={(e) =>
-                                    onUpdateBubble({ borderColor: e.target.value })
-                                  }
-                                  className="h-6 w-8 cursor-pointer rounded border border-stone-200 p-0.5"
-                                />
-                              </div>
-                            )}
-
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-stone-600">은은한 입체 그림자</span>
-                              <input
-                                type="checkbox"
-                                checked={selectedBubble.hasShadow}
-                                onChange={(e) =>
-                                  onUpdateBubble({ hasShadow: e.target.checked })
-                                }
-                                className="h-4 w-4 rounded accent-stone-900"
-                              />
-                            </div>
-
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-stone-600">하단 그림자 (4px 단색)</span>
-                              <input
-                                type="checkbox"
-                                checked={Boolean(selectedBubble.hasBottomShadow)}
-                                onChange={(e) =>
-                                  onUpdateBubble({ hasBottomShadow: e.target.checked })
-                                }
-                                className="h-4 w-4 rounded accent-stone-900"
-                              />
-                            </div>
-
-                            {selectedBubble.hasBottomShadow && (
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-stone-600">하단 그림자 색상</span>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-mono text-[10px] text-stone-500">
-                                    {selectedBubble.bottomShadowColor || '#b9a98e'}
-                                  </span>
-                                  <input
-                                    type="color"
-                                    value={selectedBubble.bottomShadowColor || '#b9a98e'}
-                                    onChange={(e) =>
-                                      onUpdateBubble({ bottomShadowColor: e.target.value })
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {(() => {
+                                const hasTailActive = Boolean(
+                                  selectedBubble.hasTail ??
+                                    (selectedBubble.align !== 'center')
+                                );
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onUpdateBubble({ hasTail: !hasTailActive })
                                     }
-                                    className="h-6 w-8 cursor-pointer rounded border border-stone-200 p-0.5"
-                                  />
-                                </div>
+                                    className={`rounded-lg border py-1.5 text-[11px] font-medium transition cursor-pointer ${
+                                      hasTailActive
+                                        ? 'border-stone-900 bg-stone-900 text-white'
+                                        : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                                    }`}
+                                  >
+                                    말풍선 꼬리 {hasTailActive ? '켜짐' : '꺼짐'}
+                                  </button>
+                                );
+                              })()}
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onUpdateBubble({
+                                    hasBorder: !selectedBubble.hasBorder,
+                                  })
+                                }
+                                className={`rounded-lg border py-1.5 text-[11px] font-medium transition cursor-pointer ${
+                                  selectedBubble.hasBorder
+                                    ? 'border-stone-900 bg-stone-900 text-white'
+                                    : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                                }`}
+                              >
+                                외곽선 {selectedBubble.hasBorder ? '켜짐' : '꺼짐'}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onUpdateBubble({
+                                    hasShadow: !selectedBubble.hasShadow,
+                                  })
+                                }
+                                className={`rounded-lg border py-1.5 text-[11px] font-medium transition cursor-pointer ${
+                                  selectedBubble.hasShadow
+                                    ? 'border-stone-900 bg-stone-900 text-white'
+                                    : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                                }`}
+                              >
+                                입체그림자 {selectedBubble.hasShadow ? '켜짐' : '꺼짐'}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onUpdateBubble({
+                                    hasBottomShadow:
+                                      !selectedBubble.hasBottomShadow,
+                                  })
+                                }
+                                className={`rounded-lg border py-1.5 text-[11px] font-medium transition cursor-pointer ${
+                                  selectedBubble.hasBottomShadow
+                                    ? 'border-stone-900 bg-stone-900 text-white'
+                                    : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                                }`}
+                              >
+                                하단그림자{' '}
+                                {selectedBubble.hasBottomShadow ? '켜짐' : '꺼짐'}
+                              </button>
+                            </div>
+
+                            {(selectedBubble.hasBorder ||
+                              selectedBubble.hasBottomShadow) && (
+                              <div className="flex items-center gap-3 pt-1 text-xs">
+                                {selectedBubble.hasBorder && (
+                                  <label className="flex items-center gap-1.5 text-[11px] text-stone-600 cursor-pointer">
+                                    <span>외곽선 색</span>
+                                    <input
+                                      type="color"
+                                      value={
+                                        selectedBubble.borderColor || '#E5DED3'
+                                      }
+                                      onChange={(e) =>
+                                        onUpdateBubble({
+                                          borderColor: e.target.value,
+                                        })
+                                      }
+                                      className="h-5 w-7 cursor-pointer rounded border border-stone-200 p-0.5"
+                                    />
+                                  </label>
+                                )}
+                                {selectedBubble.hasBottomShadow && (
+                                  <label className="flex items-center gap-1.5 text-[11px] text-stone-600 cursor-pointer">
+                                    <span>하단그림자 색</span>
+                                    <input
+                                      type="color"
+                                      value={
+                                        selectedBubble.bottomShadowColor ||
+                                        '#b9a98e'
+                                      }
+                                      onChange={(e) =>
+                                        onUpdateBubble({
+                                          bottomShadowColor: e.target.value,
+                                        })
+                                      }
+                                      className="h-5 w-7 cursor-pointer rounded border border-stone-200 p-0.5"
+                                    />
+                                  </label>
+                                )}
                               </div>
                             )}
                           </div>

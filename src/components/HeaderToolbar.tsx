@@ -101,9 +101,10 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           onClick={onResetToSample}
           title="초기화"
           aria-label="초기화"
-          className="flex items-center justify-center shrink-0 rounded-lg border border-stone-200 bg-white p-2 lg:p-1.5 text-stone-500 hover:bg-stone-50 hover:text-stone-800 transition cursor-pointer"
+          className="flex items-center justify-center gap-1 whitespace-nowrap shrink-0 rounded-lg border border-stone-200 bg-white p-2 md:px-2.5 lg:py-1.5 text-xs font-medium text-stone-700 shadow-2xs hover:bg-stone-50 hover:text-stone-900 transition cursor-pointer"
         >
-          <RotateCcw className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0" />
+          <RotateCcw className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0 text-stone-500" />
+          <span className="hidden md:inline">초기화</span>
         </button>
       </div>
 
