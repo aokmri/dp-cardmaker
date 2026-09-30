@@ -221,10 +221,19 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
             type="button"
             id="btn-save-side-style"
             onClick={handleSave}
+            disabled={!isModified}
             title="저장"
-            className="flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-stone-900 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 active:scale-[0.99] transition"
+            className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+              isModified
+                ? 'border-stone-900 bg-stone-900 text-white shadow-xs hover:bg-stone-800 active:scale-[0.99] cursor-pointer'
+                : 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed'
+            }`}
           >
-            <Save className="h-3.5 w-3.5 shrink-0 text-amber-300" />
+            <Save
+              className={`h-3.5 w-3.5 shrink-0 ${
+                isModified ? 'text-amber-300' : 'text-stone-400'
+              }`}
+            />
             <span className="hidden sm:inline">저장</span>
           </button>
 

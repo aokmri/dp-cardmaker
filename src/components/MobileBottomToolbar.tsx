@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Sliders,
   Type,
-  Palette,
-  Maximize2,
+  MessageCircle,
+  Move,
   Image as ImageIcon,
   Layout,
   Bold,
@@ -18,12 +17,13 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
-  Plus,
   Sparkles,
   Check,
+  Save,
   X,
   ArrowUp,
   ArrowDown,
+  Clock,
 } from 'lucide-react';
 import {
   Bubble,
@@ -45,13 +45,12 @@ import {
   getSelectionWithinBubble,
   stripInlineFontFamilyFromHtml,
 } from '../utils/richText';
-import { applyTextareaClipboardPaste } from '../utils/pasteFormatter';
 
 export type MobileToolId =
-  | 'batch'
   | 'typography'
   | 'color'
   | 'spacing'
+  | 'meta'
   | 'canvasBg'
   | 'canvasLayout'
   | null;
@@ -100,6 +99,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
   fonts,
   onOpenFontManager,
   defaultSideStyles,
+  savedSideStyles,
   onUpdateSideStyle,
   onSaveSideStyle,
   onRevertSideStyle,
@@ -112,6 +112,9 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<'single' | 'batch'>('single');
   const [expandedSliderKey, setExpandedSliderKey] = useState<string | null>(null);
+  const [isTextSpacingOpen, setIsTextSpacingOpen] = useState(false);
+  const [isBubbleSizeOpen, setIsBubbleSizeOpen] = useState(false);
+  const [isCardSizeGroupOpen, setIsCardSizeGroupOpen] = useState(false);
 
   // Automatically switch to single edit mode and sync batch side when a bubble is tapped on canvas
   useEffect(() => {
@@ -441,24 +444,19 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
     showToast(`${sideLabel} 기본서식으로 저장됨`);
   };
 
-  // Shared Target Switcher Header inside Typography/Color/Spacing popovers
-  const renderTargetHeader = (title: string) => (
-    <div className="flex items-center justify-between gap-2 border-b border-stone-200/80 px-3.5 py-2 bg-stone-50/90">
-      <div className="flex items-center gap-1.5 min-w-0">
-        <span className="text-xs font-bold text-stone-800 whitespace-nowrap">
-          {title}
-        </span>
-        {toastMsg && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 truncate">
-            <Check className="h-3 w-3 shrink-0" />
-            {toastMsg}
-          </span>
-        )}
-      </div>
+  const currentBatchStyle =
+    defaultSideStyles[activeBatchSide] || defaultSideStyles.left;
+  const savedBatchStyle =
+    savedSideStyles[activeBatchSide] || savedSideStyles.left;
+  const isBatchModified =
+    JSON.stringify(currentBatchStyle) !== JSON.stringify(savedBatchStyle);
 
-      <div className="flex items-center gap-1.5 shrink-0">
-        {/* Toggle between editing the selected bubble vs batch default side */}
-        <div className="flex items-center rounded-lg bg-stone-200/75 p-0.5 text-[11px]">
+  // Shared Target Switcher Header inside Typography/Color/Meta popovers
+  const renderTargetHeader = (_title?: string) => (
+    <div className="flex items-center justify-between gap-1.5 border-b border-stone-200/80 px-2.5 py-2 bg-stone-50/90">
+      <div className="flex items-center gap-1.5 min-w-0">
+        {/* Toggle between editing the selected bubble vs batch default side (moved to left) */}
+        <div className="flex items-center rounded-lg bg-stone-200/75 p-0.5 text-[11px] shrink-0">
           <button
             type="button"
             onClick={() => {
@@ -487,6 +485,56 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
             일괄 기본서식
           </button>
         </div>
+
+        {toastMsg && (
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 truncate">
+            <Check className="h-3 w-3 shrink-0" />
+            {toastMsg}
+          </span>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1 shrink-0">
+        {!isEditingSingle && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              disabled={!isBatchModified}
+              onClick={() => {
+                onSaveSideStyle(activeBatchSide);
+                showToast('기본서식으로 저장됨');
+              }}
+              className={`flex items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-semibold transition ${
+                isBatchModified
+                  ? 'border-stone-900 bg-stone-900 text-white shadow-2xs active:bg-stone-800 cursor-pointer'
+                  : 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed'
+              }`}
+            >
+              <Save
+                className={`h-3 w-3 shrink-0 ${
+                  isBatchModified ? 'text-amber-300' : 'text-stone-400'
+                }`}
+              />
+              <span>서식 저장</span>
+            </button>
+            <button
+              type="button"
+              disabled={!isBatchModified}
+              onClick={() => {
+                onRevertSideStyle(activeBatchSide);
+                showToast('저장된 서식으로 복원됨');
+              }}
+              className={`flex items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-semibold transition ${
+                isBatchModified
+                  ? 'border-stone-300 bg-white text-stone-800 shadow-2xs active:bg-stone-100 cursor-pointer'
+                  : 'border-stone-200 bg-stone-100 text-stone-400 cursor-not-allowed'
+              }`}
+            >
+              <RotateCcw className="h-3 w-3 shrink-0" />
+              <span>복원</span>
+            </button>
+          </div>
+        )}
 
         <button
           type="button"
@@ -533,32 +581,32 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
   }[] = [
     {
       id: 'typography',
-      label: '폰트·텍스트',
+      label: '텍스트',
       icon: <Type className="h-4 w-4" />,
     },
     {
       id: 'color',
-      label: '색상·배경',
-      icon: <Palette className="h-4 w-4" />,
+      label: '말풍선',
+      icon: <MessageCircle className="h-4 w-4" />,
     },
     {
       id: 'spacing',
-      label: '배치·여백',
-      icon: <Maximize2 className="h-4 w-4" />,
+      label: '정렬·위치',
+      icon: <Move className="h-4 w-4" />,
     },
     {
-      id: 'batch',
-      label: '일괄서식',
-      icon: <Sliders className="h-4 w-4" />,
+      id: 'meta',
+      label: '이름·시간',
+      icon: <Clock className="h-4 w-4" />,
     },
     {
       id: 'canvasBg',
-      label: '배경지·질감',
+      label: '배경지',
       icon: <ImageIcon className="h-4 w-4" />,
     },
     {
       id: 'canvasLayout',
-      label: '구분선·규격',
+      label: '머릿말·규격',
       icon: <Layout className="h-4 w-4" />,
     },
   ];
@@ -572,15 +620,15 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
       {/* Floating Dropdown Panel (Samsung Notes style popover above the bottom bar) */}
       {openTool && (
         <div className="pointer-events-auto mx-2 mb-1.5 overflow-hidden rounded-2xl border border-stone-200/95 bg-white/98 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-2 duration-150">
-          {/* 1. TYPOGRAPHY & TEXT CONTENT POPOVER */}
+          {/* 1. TEXT POPOVER (초기화버튼 > 폰트 > 서식 > 글자크기 > 글자색상 > 글자간격) */}
           {openTool === 'typography' && (
             <div className="flex flex-col max-h-[42vh]">
-              {renderTargetHeader('폰트 · 텍스트 설정')}
+              {renderTargetHeader('텍스트')}
               <div className="overflow-y-auto p-3.5 space-y-3">
+                {/* 1) 초기화버튼 / 일괄 위치 선택 */}
                 {!isEditingSingle ? (
                   renderBatchSideSelector()
                 ) : selectedBubble ? (
-                  /* Quick Reset & Save as Default row at the very top of Single mode */
                   <div className="flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50/80 p-2">
                     <button
                       type="button"
@@ -606,7 +654,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                   </div>
                 ) : null}
 
-                {/* Font Selector */}
+                {/* 2) 폰트 */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-semibold text-stone-600">
@@ -636,36 +684,11 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                   />
                 </div>
 
-                {/* Font Size + Style Toggles + Alignment */}
-                <div className="space-y-2 pt-1 border-t border-stone-100">
-                  <div className="grid grid-cols-2 gap-2">
-                    {renderCollapsibleSlider({
-                      sliderKey: 'typo-fontSize',
-                      label: '글자 크기',
-                      displayValue: `${activeStyle.fontSize}px`,
-                      value: activeStyle.fontSize,
-                      min: 12,
-                      max: 44,
-                      step: 1,
-                      onChange: (fontSize) => handleStyleChange({ fontSize }),
-                    })}
-
-                    {renderCollapsibleSlider({
-                      sliderKey: 'typo-textOffsetY',
-                      label: '텍스트 상하 위치',
-                      displayValue:
-                        (activeStyle.textOffsetY ?? 0) > 0
-                          ? `+${activeStyle.textOffsetY}px`
-                          : `${activeStyle.textOffsetY ?? 0}px`,
-                      value: activeStyle.textOffsetY ?? 0,
-                      min: -12,
-                      max: 12,
-                      step: 0.5,
-                      onChange: (textOffsetY) =>
-                        handleStyleChange({ textOffsetY }),
-                    })}
-                  </div>
-
+                {/* 3) 서식 (굵게/기울임/밑줄/취소선 + 정렬) */}
+                <div className="space-y-1.5 pt-2 border-t border-stone-100">
+                  <span className="block text-[11px] font-semibold text-stone-600">
+                    서식
+                  </span>
                   <div className="flex items-center gap-1.5">
                     <div className="grid grid-cols-4 gap-1 flex-1">
                       <button
@@ -743,39 +766,554 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                   </div>
                 </div>
 
-                {/* Direct Text & Speaker Input when editing a single bubble */}
-                {isEditingSingle && selectedBubble && (
-                  <div className="space-y-2 pt-2 border-t border-stone-100">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-stone-600">
-                        대사 내용
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={selectedBubble.text}
-                        onChange={(e) =>
-                          onUpdateBubble({
-                            text: e.target.value,
-                            html: undefined,
-                          })
-                        }
-                        onPaste={(e) =>
-                          applyTextareaClipboardPaste(
-                            e,
-                            selectedBubble.text,
-                            onUpdateBubble
-                          )
-                        }
-                        style={{ fontFamily: selectedBubble.fontFamily }}
-                        className="w-full rounded-lg border border-stone-200 p-2 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"
-                        placeholder="대사 텍스트를 입력하세요"
+                {/* 4) 글자 크기 */}
+                <div className="pt-2 border-t border-stone-100">
+                  {renderCollapsibleSlider({
+                    sliderKey: 'typo-fontSize',
+                    label: '글자 크기',
+                    displayValue: `${activeStyle.fontSize}px`,
+                    value: activeStyle.fontSize,
+                    min: 12,
+                    max: 44,
+                    step: 1,
+                    onChange: (fontSize) => handleStyleChange({ fontSize }),
+                  })}
+                </div>
+
+                {/* 5) 글자 색상 */}
+                <div className="space-y-1.5 pt-2 border-t border-stone-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-stone-600">
+                      글자 색상
+                    </span>
+                    <span className="font-mono text-[10px] text-stone-400">
+                      {activeStyle.color}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {COLOR_PALETTE.text.map((c) => (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => handleTextColor(c.value)}
+                        title={c.label}
+                        style={{ backgroundColor: c.value }}
+                        className={`h-7 w-7 rounded-full border border-stone-300 transition-transform ${
+                          activeStyle.color.toLowerCase() ===
+                          c.value.toLowerCase()
+                            ? 'scale-110 ring-2 ring-stone-900 ring-offset-1'
+                            : ''
+                        }`}
                       />
+                    ))}
+                    <label className="flex items-center gap-1 rounded-lg border border-stone-200 bg-stone-50 px-2 py-1 text-[11px] text-stone-700 cursor-pointer">
+                      <input
+                        type="color"
+                        value={activeStyle.color}
+                        onChange={(e) => handleTextColor(e.target.value)}
+                        className="h-4 w-4 border-0 bg-transparent p-0"
+                      />
+                      <span>직접 선택</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* 6) 글자 간격 (자간, 행간, 텍스트 상하 위치) - 기본 접어두기 */}
+                <div className="border-y border-stone-200 py-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsTextSpacingOpen((prev) => !prev)}
+                    className="flex w-full items-center justify-between text-left cursor-pointer"
+                  >
+                    <span className="text-[11px] font-semibold text-stone-700">
+                      글자 간격
+                    </span>
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 text-stone-400 transition-transform duration-200 ${
+                        isTextSpacingOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {isTextSpacingOpen && (
+                    <div className="grid grid-cols-2 gap-2 pt-2.5">
+                      {renderCollapsibleSlider({
+                        sliderKey: 'typo-letterSpacing',
+                        label: '자간',
+                        displayValue: `${activeStyle.letterSpacing ?? 0}px`,
+                        value: activeStyle.letterSpacing ?? 0,
+                        min: -3,
+                        max: 10,
+                        step: 0.5,
+                        onChange: (letterSpacing) =>
+                          handleStyleChange({ letterSpacing }),
+                      })}
+
+                      {renderCollapsibleSlider({
+                        sliderKey: 'typo-lineHeight',
+                        label: '행간',
+                        displayValue: (activeStyle.lineHeight ?? 1.5).toFixed(2),
+                        value: activeStyle.lineHeight ?? 1.5,
+                        min: 1.1,
+                        max: 2.2,
+                        step: 0.05,
+                        onChange: (lineHeight) =>
+                          handleStyleChange({ lineHeight }),
+                      })}
+
+                      <div className="col-span-2">
+                        {renderCollapsibleSlider({
+                          sliderKey: 'typo-textOffsetY',
+                          label: '텍스트 상하 위치',
+                          displayValue:
+                            (activeStyle.textOffsetY ?? 0) > 0
+                              ? `+${activeStyle.textOffsetY}px`
+                              : `${activeStyle.textOffsetY ?? 0}px`,
+                          value: activeStyle.textOffsetY ?? 0,
+                          min: -12,
+                          max: 12,
+                          step: 0.5,
+                          onChange: (textOffsetY) =>
+                            handleStyleChange({ textOffsetY }),
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. BUBBLE POPOVER (일반/구름말풍선 > 말풍선배경색 > 말풍선크기 > 스타일) */}
+          {openTool === 'color' && (
+            <div className="flex flex-col max-h-[42vh]">
+              {renderTargetHeader('말풍선')}
+              <div className="overflow-y-auto p-3.5 space-y-3.5">
+                {!isEditingSingle && renderBatchSideSelector()}
+
+                {/* 1) 일반 / 구름 말풍선 선택 버튼 */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleStyleChange({ bubbleShape: 'default' })}
+                    className={`rounded-lg border py-2 text-xs font-semibold transition ${
+                      (activeStyle.bubbleShape || 'default') === 'default'
+                        ? 'border-stone-900 bg-stone-900 text-white shadow-2xs'
+                        : 'border-stone-200 bg-white text-stone-700'
+                    }`}
+                  >
+                    일반 말풍선
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleStyleChange({ bubbleShape: 'cloud' })}
+                    className={`rounded-lg border py-2 text-xs font-semibold transition ${
+                      activeStyle.bubbleShape === 'cloud'
+                        ? 'border-stone-900 bg-stone-900 text-white shadow-2xs'
+                        : 'border-stone-200 bg-white text-stone-700'
+                    }`}
+                  >
+                    구름 말풍선
+                  </button>
+                </div>
+
+                {/* 2) 말풍선 배경색 */}
+                <div className="space-y-1.5 pt-2 border-t border-stone-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-stone-600">
+                      말풍선 배경색
+                    </span>
+                    <span className="text-[10px] text-stone-500">
+                      {COLOR_PALETTE.bubbleBg.find(
+                        (b) =>
+                          b.value.toLowerCase() ===
+                          activeStyle.bgColor.toLowerCase()
+                      )?.label || activeStyle.bgColor}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {COLOR_PALETTE.bubbleBg.map((c) => {
+                      const isTransparent = c.value === 'transparent';
+                      return (
+                        <button
+                          key={c.value}
+                          type="button"
+                          onClick={() => handleStyleChange({ bgColor: c.value })}
+                          title={c.label}
+                          style={{
+                            backgroundColor: isTransparent
+                              ? '#ffffff'
+                              : c.value,
+                            backgroundImage: isTransparent
+                              ? 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)'
+                              : undefined,
+                            backgroundSize: isTransparent
+                              ? '8px 8px'
+                              : undefined,
+                            backgroundPosition: isTransparent
+                              ? '0 0, 0 4px, 4px -4px, -4px 0'
+                              : undefined,
+                          }}
+                          className={`relative h-7 w-7 rounded-full border border-stone-300 transition-transform ${
+                            activeStyle.bgColor.toLowerCase() ===
+                            c.value.toLowerCase()
+                              ? 'scale-110 ring-2 ring-stone-900 ring-offset-1'
+                              : ''
+                          }`}
+                        />
+                      );
+                    })}
+                    <label className="flex items-center gap-1 rounded-lg border border-stone-200 bg-stone-50 px-2 py-1 text-[11px] text-stone-700 cursor-pointer">
+                      <input
+                        type="color"
+                        value={
+                          activeStyle.bgColor === 'transparent'
+                            ? '#FBF8F1'
+                            : activeStyle.bgColor
+                        }
+                        onChange={(e) =>
+                          handleStyleChange({ bgColor: e.target.value })
+                        }
+                        className="h-4 w-4 border-0 bg-transparent p-0"
+                      />
+                      <span>직접 선택</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* 3) 말풍선 크기 (모서리 둥글기, 상하/좌우 여백) - 기본 접어두기 */}
+                <div className="border-y border-stone-200 py-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsBubbleSizeOpen((prev) => !prev)}
+                    className="flex w-full items-center justify-between text-left cursor-pointer"
+                  >
+                    <span className="text-[11px] font-semibold text-stone-700">
+                      말풍선 크기
+                    </span>
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 text-stone-400 transition-transform duration-200 ${
+                        isBubbleSizeOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {isBubbleSizeOpen && (
+                    <div className="grid grid-cols-2 gap-2 pt-2.5">
+                      {renderCollapsibleSlider({
+                        sliderKey: 'bubble-borderRadius',
+                        label:
+                          activeStyle.bubbleShape === 'cloud'
+                            ? '모서리 둥글기 (구름)'
+                            : '모서리 둥글기 (일반)',
+                        displayValue: `${
+                          activeStyle.bubbleShape === 'cloud'
+                            ? (activeStyle.cloudBorderRadius ?? 14)
+                            : activeStyle.borderRadius
+                        }px`,
+                        value:
+                          activeStyle.bubbleShape === 'cloud'
+                            ? (activeStyle.cloudBorderRadius ?? 14)
+                            : activeStyle.borderRadius,
+                        min: 0,
+                        max: 36,
+                        step: 1,
+                        onChange: (val) =>
+                          handleStyleChange(
+                            activeStyle.bubbleShape === 'cloud'
+                              ? { cloudBorderRadius: val }
+                              : { borderRadius: val }
+                          ),
+                      })}
+
+                      {renderCollapsibleSlider({
+                        sliderKey: 'bubble-paddingY',
+                        label:
+                          activeStyle.bubbleShape === 'cloud'
+                            ? '상하 여백 (구름)'
+                            : '상하 여백 (일반)',
+                        displayValue: `${
+                          activeStyle.bubbleShape === 'cloud'
+                            ? (activeStyle.cloudPaddingY ?? 8)
+                            : activeStyle.paddingY
+                        }px`,
+                        value:
+                          activeStyle.bubbleShape === 'cloud'
+                            ? (activeStyle.cloudPaddingY ?? 8)
+                            : activeStyle.paddingY,
+                        min: 4,
+                        max: 36,
+                        step: 1,
+                        onChange: (val) =>
+                          handleStyleChange(
+                            activeStyle.bubbleShape === 'cloud'
+                              ? { cloudPaddingY: val }
+                              : { paddingY: val }
+                          ),
+                      })}
+
+                      <div className="col-span-2">
+                        {renderCollapsibleSlider({
+                          sliderKey: 'bubble-paddingX',
+                          label:
+                            activeStyle.bubbleShape === 'cloud'
+                              ? '좌우 여백 (구름)'
+                              : '좌우 여백 (일반)',
+                          displayValue: `${
+                            activeStyle.bubbleShape === 'cloud'
+                              ? (activeStyle.cloudPaddingX ?? 24)
+                              : activeStyle.paddingX
+                          }px`,
+                          value:
+                            activeStyle.bubbleShape === 'cloud'
+                              ? (activeStyle.cloudPaddingX ?? 24)
+                              : activeStyle.paddingX,
+                          min: 10,
+                          max: 48,
+                          step: 1,
+                          onChange: (val) =>
+                            handleStyleChange(
+                              activeStyle.bubbleShape === 'cloud'
+                                ? { cloudPaddingX: val }
+                                : { paddingX: val }
+                            ),
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 4) 스타일 (말풍선 꼬리, 테두리선, 그림자) - 버튼식 */}
+                <div className="space-y-2">
+                  <span className="block text-[11px] font-semibold text-stone-600">
+                    스타일
+                  </span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(() => {
+                      const hasTailActive =
+                        activeStyle.hasTail ??
+                        (isEditingSingle && selectedBubble
+                          ? selectedBubble.align !== 'center'
+                          : activeBatchSide !== 'center');
+                      return (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleStyleChange({ hasTail: !hasTailActive })
+                          }
+                          className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
+                            hasTailActive
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-200 bg-white text-stone-600'
+                          }`}
+                        >
+                          말풍선 꼬리 {hasTailActive ? '켜짐' : '꺼짐'}
+                        </button>
+                      );
+                    })()}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleStyleChange({ hasBorder: !activeStyle.hasBorder })
+                      }
+                      className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
+                        activeStyle.hasBorder
+                          ? 'border-stone-900 bg-stone-900 text-white'
+                          : 'border-stone-200 bg-white text-stone-600'
+                      }`}
+                    >
+                      외곽선 {activeStyle.hasBorder ? '켜짐' : '꺼짐'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleStyleChange({ hasShadow: !activeStyle.hasShadow })
+                      }
+                      className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
+                        activeStyle.hasShadow
+                          ? 'border-stone-900 bg-stone-900 text-white'
+                          : 'border-stone-200 bg-white text-stone-600'
+                      }`}
+                    >
+                      입체그림자 {activeStyle.hasShadow ? '켜짐' : '꺼짐'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleStyleChange({
+                          hasBottomShadow: !activeStyle.hasBottomShadow,
+                        })
+                      }
+                      className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
+                        activeStyle.hasBottomShadow
+                          ? 'border-stone-900 bg-stone-900 text-white'
+                          : 'border-stone-200 bg-white text-stone-600'
+                      }`}
+                    >
+                      하단그림자 {activeStyle.hasBottomShadow ? '켜짐' : '꺼짐'}
+                    </button>
+                  </div>
+
+                  {(activeStyle.hasBorder || activeStyle.hasBottomShadow) && (
+                    <div className="flex items-center gap-3 pt-1 text-xs">
+                      {activeStyle.hasBorder && (
+                        <label className="flex items-center gap-1.5 text-[11px] text-stone-600">
+                          <span>외곽선 색</span>
+                          <input
+                            type="color"
+                            value={activeStyle.borderColor || '#E5DED3'}
+                            onChange={(e) =>
+                              handleStyleChange({ borderColor: e.target.value })
+                            }
+                            className="h-5 w-7 cursor-pointer rounded border border-stone-200 p-0.5"
+                          />
+                        </label>
+                      )}
+                      {activeStyle.hasBottomShadow && (
+                        <label className="flex items-center gap-1.5 text-[11px] text-stone-600">
+                          <span>하단그림자 색</span>
+                          <input
+                            type="color"
+                            value={activeStyle.bottomShadowColor || '#b9a98e'}
+                            onChange={(e) =>
+                              handleStyleChange({
+                                bottomShadowColor: e.target.value,
+                              })
+                            }
+                            className="h-5 w-7 cursor-pointer rounded border border-stone-200 p-0.5"
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 3. SPACING & ALIGNMENT POPOVER (말풍선 정렬 & 위치 이동) */}
+          {openTool === 'spacing' && (
+            <div className="flex flex-col max-h-[42vh]">
+              <div className="flex items-center justify-between border-b border-stone-200/80 px-3.5 py-2 bg-stone-50/90">
+                <span className="text-xs font-bold text-stone-800">
+                  말풍선 정렬 & 위치 이동
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setOpenTool(null)}
+                  aria-label="설정창 닫기"
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-stone-500 hover:bg-stone-200/70 hover:text-stone-800"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="overflow-y-auto p-3.5 space-y-3">
+                {selectedBubble ? (
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-end gap-1">
+                      {onMoveBubbleOrder && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => onMoveBubbleOrder('up')}
+                            title="위로 이동"
+                            className="flex items-center gap-0.5 rounded border border-stone-200 bg-white px-2 py-1 text-[11px] text-stone-700 active:bg-stone-100"
+                          >
+                            <ArrowUp className="h-3 w-3" />
+                            위
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onMoveBubbleOrder('down')}
+                            title="아래로 이동"
+                            className="flex items-center gap-0.5 rounded border border-stone-200 bg-white px-2 py-1 text-[11px] text-stone-700 active:bg-stone-100"
+                          >
+                            <ArrowDown className="h-3 w-3" />
+                            아래
+                          </button>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        onClick={onDuplicateBubble}
+                        title="말풍선 복제"
+                        className="flex items-center gap-0.5 rounded border border-stone-200 bg-white px-2 py-1 text-[11px] text-stone-700 active:bg-stone-100"
+                      >
+                        <Copy className="h-3 w-3" />
+                        복제
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onDeleteBubble}
+                        title="말풍선 삭제"
+                        className="flex items-center gap-0.5 rounded border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] text-rose-700 active:bg-rose-100"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        삭제
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onUpdateBubble({ align: 'left', x: 6 })}
+                        className={`flex items-center justify-center gap-1 rounded-lg border py-1.5 text-xs font-medium ${
+                          selectedBubble.align === 'left'
+                            ? 'border-stone-900 bg-stone-900 text-white'
+                            : 'border-stone-200 bg-white text-stone-700'
+                        }`}
+                      >
+                        <AlignLeft className="h-3.5 w-3.5" />
+                        좌측
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateBubble({ align: 'center', x: 25 })
+                        }
+                        className={`flex items-center justify-center gap-1 rounded-lg border py-1.5 text-xs font-medium ${
+                          selectedBubble.align === 'center'
+                            ? 'border-stone-900 bg-stone-900 text-white'
+                            : 'border-stone-200 bg-white text-stone-700'
+                        }`}
+                      >
+                        <AlignCenter className="h-3.5 w-3.5" />
+                        중앙
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateBubble({ align: 'right', x: 45 })
+                        }
+                        className={`flex items-center justify-center gap-1 rounded-lg border py-1.5 text-xs font-medium ${
+                          selectedBubble.align === 'right'
+                            ? 'border-stone-900 bg-stone-900 text-white'
+                            : 'border-stone-200 bg-white text-stone-700'
+                        }`}
+                      >
+                        <AlignRight className="h-3.5 w-3.5" />
+                        우측
+                      </button>
                     </div>
                   </div>
+                ) : (
+                  <p className="py-3 text-center text-xs text-stone-500">
+                    위치를 이동할 말풍선을 먼저 선택해 주세요.
+                  </p>
                 )}
+              </div>
+            </div>
+          )}
 
-                {/* Speaker Name & Date Section (works for both Single and Batch mode) */}
-                <div className="space-y-2.5 rounded-xl border border-stone-200 bg-stone-50/70 p-2.5">
+          {/* 4. SPEAKER NAME & TIME POPOVER */}
+          {openTool === 'meta' && (
+            <div className="flex flex-col max-h-[42vh]">
+              {renderTargetHeader('이름/시간 표시')}
+              <div className="overflow-y-auto p-3.5 space-y-3">
+                {!isEditingSingle && renderBatchSideSelector()}
+
+                <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-semibold text-stone-700">
                       이름/시간 표시
@@ -784,7 +1322,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                       <button
                         type="button"
                         onClick={() => handleStyleChange({ showMeta: true })}
-                        className={`rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                        className={`rounded-md px-2.5 py-0.5 text-[10px] font-semibold transition-colors ${
                           Boolean(
                             activeStyle.showMeta ??
                               Boolean(activeStyle.speaker || activeStyle.dateText)
@@ -798,7 +1336,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                       <button
                         type="button"
                         onClick={() => handleStyleChange({ showMeta: false })}
-                        className={`rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                        className={`rounded-md px-2.5 py-0.5 text-[10px] font-semibold transition-colors ${
                           !Boolean(
                             activeStyle.showMeta ??
                               Boolean(activeStyle.speaker || activeStyle.dateText)
@@ -816,7 +1354,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                     activeStyle.showMeta ??
                       Boolean(activeStyle.speaker || activeStyle.dateText)
                   ) && (
-                    <div className="space-y-2.5 pt-1.5 border-t border-stone-200/80">
+                    <div className="space-y-2.5 pt-2 border-t border-stone-100">
                       <div className="grid grid-cols-2 gap-1.5">
                         <button
                           type="button"
@@ -947,679 +1485,12 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
             </div>
           )}
 
-          {/* 2. COLOR & BUBBLE BACKGROUND POPOVER */}
-          {openTool === 'color' && (
-            <div className="flex flex-col max-h-[42vh]">
-              {renderTargetHeader('글자색 · 말풍선 배경')}
-              <div className="overflow-y-auto p-3.5 space-y-3.5">
-                {!isEditingSingle && renderBatchSideSelector()}
-
-                {/* Text Color */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-stone-600">
-                      글자 색상
-                    </span>
-                    <span className="font-mono text-[10px] text-stone-400">
-                      {activeStyle.color}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {COLOR_PALETTE.text.map((c) => (
-                      <button
-                        key={c.value}
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => handleTextColor(c.value)}
-                        title={c.label}
-                        style={{ backgroundColor: c.value }}
-                        className={`h-7 w-7 rounded-full border border-stone-300 transition-transform ${
-                          activeStyle.color.toLowerCase() ===
-                          c.value.toLowerCase()
-                            ? 'scale-110 ring-2 ring-stone-900 ring-offset-1'
-                            : ''
-                        }`}
-                      />
-                    ))}
-                    <label className="flex items-center gap-1 rounded-lg border border-stone-200 bg-stone-50 px-2 py-1 text-[11px] text-stone-700 cursor-pointer">
-                      <input
-                        type="color"
-                        value={activeStyle.color}
-                        onChange={(e) => handleTextColor(e.target.value)}
-                        className="h-4 w-4 border-0 bg-transparent p-0"
-                      />
-                      <span>직접 선택</span>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Bubble Background Color */}
-                <div className="space-y-1.5 pt-2 border-t border-stone-100">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-stone-600">
-                      말풍선 배경색
-                    </span>
-                    <span className="text-[10px] text-stone-500">
-                      {COLOR_PALETTE.bubbleBg.find(
-                        (b) =>
-                          b.value.toLowerCase() ===
-                          activeStyle.bgColor.toLowerCase()
-                      )?.label || activeStyle.bgColor}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {COLOR_PALETTE.bubbleBg.map((c) => {
-                      const isTransparent = c.value === 'transparent';
-                      return (
-                        <button
-                          key={c.value}
-                          type="button"
-                          onClick={() => handleStyleChange({ bgColor: c.value })}
-                          title={c.label}
-                          style={{
-                            backgroundColor: isTransparent
-                              ? '#ffffff'
-                              : c.value,
-                            backgroundImage: isTransparent
-                              ? 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)'
-                              : undefined,
-                            backgroundSize: isTransparent
-                              ? '8px 8px'
-                              : undefined,
-                            backgroundPosition: isTransparent
-                              ? '0 0, 0 4px, 4px -4px, -4px 0'
-                              : undefined,
-                          }}
-                          className={`relative h-7 w-7 rounded-full border border-stone-300 transition-transform ${
-                            activeStyle.bgColor.toLowerCase() ===
-                            c.value.toLowerCase()
-                              ? 'scale-110 ring-2 ring-stone-900 ring-offset-1'
-                              : ''
-                          }`}
-                        />
-                      );
-                    })}
-                    <label className="flex items-center gap-1 rounded-lg border border-stone-200 bg-stone-50 px-2 py-1 text-[11px] text-stone-700 cursor-pointer">
-                      <input
-                        type="color"
-                        value={
-                          activeStyle.bgColor === 'transparent'
-                            ? '#FBF8F1'
-                            : activeStyle.bgColor
-                        }
-                        onChange={(e) =>
-                          handleStyleChange({ bgColor: e.target.value })
-                        }
-                        className="h-4 w-4 border-0 bg-transparent p-0"
-                      />
-                      <span>직접 선택</span>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Border & Shadow Toggles */}
-                <div className="space-y-2 pt-2 border-t border-stone-100">
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleStyleChange({ hasBorder: !activeStyle.hasBorder })
-                      }
-                      className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
-                        activeStyle.hasBorder
-                          ? 'border-stone-900 bg-stone-900 text-white'
-                          : 'border-stone-200 bg-white text-stone-600'
-                      }`}
-                    >
-                      외곽선 {activeStyle.hasBorder ? '켜짐' : '꺼짐'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleStyleChange({ hasShadow: !activeStyle.hasShadow })
-                      }
-                      className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
-                        activeStyle.hasShadow
-                          ? 'border-stone-900 bg-stone-900 text-white'
-                          : 'border-stone-200 bg-white text-stone-600'
-                      }`}
-                    >
-                      입체그림자 {activeStyle.hasShadow ? '켜짐' : '꺼짐'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleStyleChange({
-                          hasBottomShadow: !activeStyle.hasBottomShadow,
-                        })
-                      }
-                      className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
-                        activeStyle.hasBottomShadow
-                          ? 'border-stone-900 bg-stone-900 text-white'
-                          : 'border-stone-200 bg-white text-stone-600'
-                      }`}
-                    >
-                      하단그림자 {activeStyle.hasBottomShadow ? '켜짐' : '꺼짐'}
-                    </button>
-                  </div>
-
-                  {(activeStyle.hasBorder || activeStyle.hasBottomShadow) && (
-                    <div className="flex items-center gap-3 pt-1 text-xs">
-                      {activeStyle.hasBorder && (
-                        <label className="flex items-center gap-1.5 text-[11px] text-stone-600">
-                          <span>외곽선 색</span>
-                          <input
-                            type="color"
-                            value={activeStyle.borderColor || '#E5DED3'}
-                            onChange={(e) =>
-                              handleStyleChange({ borderColor: e.target.value })
-                            }
-                            className="h-5 w-7 cursor-pointer rounded border border-stone-200 p-0.5"
-                          />
-                        </label>
-                      )}
-                      {activeStyle.hasBottomShadow && (
-                        <label className="flex items-center gap-1.5 text-[11px] text-stone-600">
-                          <span>하단그림자 색</span>
-                          <input
-                            type="color"
-                            value={activeStyle.bottomShadowColor || '#b9a98e'}
-                            onChange={(e) =>
-                              handleStyleChange({
-                                bottomShadowColor: e.target.value,
-                              })
-                            }
-                            className="h-5 w-7 cursor-pointer rounded border border-stone-200 p-0.5"
-                          />
-                        </label>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 3. SPACING & ALIGNMENT POPOVER */}
-          {openTool === 'spacing' && (
-            <div className="flex flex-col max-h-[42vh]">
-              {renderTargetHeader('배치 · 여백 · 간격')}
-              <div className="overflow-y-auto p-3.5 space-y-3">
-                {isEditingSingle && selectedBubble ? (
-                  <div className="space-y-2 pb-2 border-b border-stone-100">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-stone-600">
-                        말풍선 위치 & 순서 이동
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {onMoveBubbleOrder && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => onMoveBubbleOrder('up')}
-                              title="위로 이동"
-                              className="flex items-center gap-0.5 rounded border border-stone-200 bg-white px-2 py-1 text-[11px] text-stone-700 active:bg-stone-100"
-                            >
-                              <ArrowUp className="h-3 w-3" />
-                              위
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onMoveBubbleOrder('down')}
-                              title="아래로 이동"
-                              className="flex items-center gap-0.5 rounded border border-stone-200 bg-white px-2 py-1 text-[11px] text-stone-700 active:bg-stone-100"
-                            >
-                              <ArrowDown className="h-3 w-3" />
-                              아래
-                            </button>
-                          </>
-                        )}
-                        <button
-                          type="button"
-                          onClick={onDuplicateBubble}
-                          title="말풍선 복제"
-                          className="flex items-center gap-0.5 rounded border border-stone-200 bg-white px-2 py-1 text-[11px] text-stone-700 active:bg-stone-100"
-                        >
-                          <Copy className="h-3 w-3" />
-                          복제
-                        </button>
-                        <button
-                          type="button"
-                          onClick={onDeleteBubble}
-                          title="말풍선 삭제"
-                          className="flex items-center gap-0.5 rounded border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] text-rose-700 active:bg-rose-100"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                          삭제
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => onUpdateBubble({ align: 'left', x: 6 })}
-                        className={`flex items-center justify-center gap-1 rounded-lg border py-1.5 text-xs font-medium ${
-                          selectedBubble.align === 'left'
-                            ? 'border-stone-900 bg-stone-900 text-white'
-                            : 'border-stone-200 bg-white text-stone-700'
-                        }`}
-                      >
-                        <AlignLeft className="h-3.5 w-3.5" />
-                        좌측
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onUpdateBubble({ align: 'center', x: 25 })
-                        }
-                        className={`flex items-center justify-center gap-1 rounded-lg border py-1.5 text-xs font-medium ${
-                          selectedBubble.align === 'center'
-                            ? 'border-stone-900 bg-stone-900 text-white'
-                            : 'border-stone-200 bg-white text-stone-700'
-                        }`}
-                      >
-                        <AlignCenter className="h-3.5 w-3.5" />
-                        중앙
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onUpdateBubble({ align: 'right', x: 45 })
-                        }
-                        className={`flex items-center justify-center gap-1 rounded-lg border py-1.5 text-xs font-medium ${
-                          selectedBubble.align === 'right'
-                            ? 'border-stone-900 bg-stone-900 text-white'
-                            : 'border-stone-200 bg-white text-stone-700'
-                        }`}
-                      >
-                        <AlignRight className="h-3.5 w-3.5" />
-                        우측
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  renderBatchSideSelector()
-                )}
-
-                {/* Bubble Shape (일반 / 구름 말풍선) */}
-                <div className="flex items-center justify-between text-xs pb-1">
-                  <span className="text-[11px] font-semibold text-stone-600">
-                    말풍선 모양
-                  </span>
-                  <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleStyleChange({ bubbleShape: 'default' })
-                      }
-                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                        (activeStyle.bubbleShape || 'default') === 'default'
-                          ? 'bg-stone-900 text-white shadow-sm'
-                          : 'text-stone-600'
-                      }`}
-                    >
-                      일반 말풍선
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleStyleChange({ bubbleShape: 'cloud' })
-                      }
-                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                        activeStyle.bubbleShape === 'cloud'
-                          ? 'bg-stone-900 text-white shadow-sm'
-                          : 'text-stone-600'
-                      }`}
-                    >
-                      구름 말풍선
-                    </button>
-                  </div>
-                </div>
-
-                {/* Bubble Tail ON/OFF (right before Corner Radius) */}
-                <div className="flex items-center justify-between text-xs pb-1">
-                  <span className="text-[11px] font-semibold text-stone-600">
-                    말풍선 꼬리
-                  </span>
-                  <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => handleStyleChange({ hasTail: true })}
-                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                        (activeStyle.hasTail ??
-                          (isEditingSingle && selectedBubble
-                            ? selectedBubble.align !== 'center'
-                            : activeBatchSide !== 'center'))
-                          ? 'bg-stone-900 text-white shadow-sm'
-                          : 'text-stone-600'
-                      }`}
-                    >
-                      ON
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleStyleChange({ hasTail: false })}
-                      className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                        !(activeStyle.hasTail ??
-                          (isEditingSingle && selectedBubble
-                            ? selectedBubble.align !== 'center'
-                            : activeBatchSide !== 'center'))
-                          ? 'bg-stone-900 text-white shadow-sm'
-                          : 'text-stone-600'
-                      }`}
-                    >
-                      OFF
-                    </button>
-                  </div>
-                </div>
-
-                {/* Sliders in compact 2-column grid (tap to reveal slider) */}
-                <div className="grid grid-cols-2 gap-2">
-                  {renderCollapsibleSlider({
-                    sliderKey: 'spacing-borderRadius',
-                    label:
-                      activeStyle.bubbleShape === 'cloud'
-                        ? '모서리 둥글기 (구름)'
-                        : '모서리 둥글기 (일반)',
-                    displayValue: `${
-                      activeStyle.bubbleShape === 'cloud'
-                        ? (activeStyle.cloudBorderRadius ?? 14)
-                        : activeStyle.borderRadius
-                    }px`,
-                    value:
-                      activeStyle.bubbleShape === 'cloud'
-                        ? (activeStyle.cloudBorderRadius ?? 14)
-                        : activeStyle.borderRadius,
-                    min: 0,
-                    max: 36,
-                    step: 1,
-                    onChange: (val) =>
-                      handleStyleChange(
-                        activeStyle.bubbleShape === 'cloud'
-                          ? { cloudBorderRadius: val }
-                          : { borderRadius: val }
-                      ),
-                  })}
-
-                  {renderCollapsibleSlider({
-                    sliderKey: 'spacing-paddingY',
-                    label:
-                      activeStyle.bubbleShape === 'cloud'
-                        ? '상하 여백 (구름)'
-                        : '상하 여백 (일반)',
-                    displayValue: `${
-                      activeStyle.bubbleShape === 'cloud'
-                        ? (activeStyle.cloudPaddingY ?? 8)
-                        : activeStyle.paddingY
-                    }px`,
-                    value:
-                      activeStyle.bubbleShape === 'cloud'
-                        ? (activeStyle.cloudPaddingY ?? 8)
-                        : activeStyle.paddingY,
-                    min: 4,
-                    max: 36,
-                    step: 1,
-                    onChange: (val) =>
-                      handleStyleChange(
-                        activeStyle.bubbleShape === 'cloud'
-                          ? { cloudPaddingY: val }
-                          : { paddingY: val }
-                      ),
-                  })}
-
-                  {renderCollapsibleSlider({
-                    sliderKey: 'spacing-paddingX',
-                    label:
-                      activeStyle.bubbleShape === 'cloud'
-                        ? '좌우 여백 (구름)'
-                        : '좌우 여백 (일반)',
-                    displayValue: `${
-                      activeStyle.bubbleShape === 'cloud'
-                        ? (activeStyle.cloudPaddingX ?? 24)
-                        : activeStyle.paddingX
-                    }px`,
-                    value:
-                      activeStyle.bubbleShape === 'cloud'
-                        ? (activeStyle.cloudPaddingX ?? 24)
-                        : activeStyle.paddingX,
-                    min: 10,
-                    max: 48,
-                    step: 1,
-                    onChange: (val) =>
-                      handleStyleChange(
-                        activeStyle.bubbleShape === 'cloud'
-                          ? { cloudPaddingX: val }
-                          : { paddingX: val }
-                      ),
-                  })}
-
-                  {renderCollapsibleSlider({
-                    sliderKey: 'spacing-lineHeight',
-                    label: '줄 간격',
-                    displayValue: (activeStyle.lineHeight ?? 1.5).toFixed(2),
-                    value: activeStyle.lineHeight ?? 1.5,
-                    min: 1.1,
-                    max: 2.2,
-                    step: 0.05,
-                    onChange: (lineHeight) => handleStyleChange({ lineHeight }),
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 4. BATCH DEFAULT PRESET MANAGER POPOVER */}
-          {openTool === 'batch' && (
-            <div className="flex flex-col max-h-[42vh]">
-              <div className="flex items-center justify-between border-b border-stone-200/80 px-3.5 py-2 bg-stone-50/90">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-stone-800">
-                    일괄 기본서식 관리 (좌/중/우)
-                  </span>
-                  {toastMsg && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
-                      <Check className="h-3 w-3" />
-                      {toastMsg}
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setOpenTool(null)}
-                  className="flex h-6 w-6 items-center justify-center rounded-full text-stone-500 hover:bg-stone-200/70"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              <div className="overflow-y-auto p-3.5 space-y-3">
-                {renderBatchSideSelector()}
-
-                <div className="grid grid-cols-2 gap-1.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onSaveSideStyle(activeBatchSide);
-                      showToast('기본서식으로 저장됨');
-                    }}
-                    className="flex items-center justify-center gap-1 rounded-lg bg-stone-900 py-2 font-semibold text-white shadow-2xs"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                    현재 서식 저장
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onRevertSideStyle(activeBatchSide);
-                      showToast('저장된 서식으로 복원됨');
-                    }}
-                    className="flex items-center justify-center gap-1 rounded-lg border border-stone-200 bg-white py-2 font-medium text-stone-700"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    원래대로 복원
-                  </button>
-                </div>
-
-                {/* Copy between sides */}
-                <div className="flex items-center gap-1.5 text-[11px]">
-                  <span className="text-stone-500 shrink-0">서식 복사:</span>
-                  {(['left', 'center', 'right'] as const)
-                    .filter((s) => s !== activeBatchSide)
-                    .map((otherSide) => {
-                      const fromLabel =
-                        otherSide === 'left'
-                          ? '왼쪽'
-                          : otherSide === 'center'
-                          ? '중앙'
-                          : '오른쪽';
-                      const toLabel =
-                        activeBatchSide === 'left'
-                          ? '왼쪽'
-                          : activeBatchSide === 'center'
-                          ? '중앙'
-                          : '오른쪽';
-                      return (
-                        <button
-                          key={otherSide}
-                          type="button"
-                          onClick={() => {
-                            onCopySideStyle(otherSide, activeBatchSide);
-                            showToast(`${fromLabel} → ${toLabel} 복사됨`);
-                          }}
-                          className="flex-1 rounded-lg border border-stone-200 bg-stone-50 py-1.5 px-2 text-stone-700 font-medium active:bg-stone-100"
-                        >
-                          {fromLabel} 서식 가져오기
-                        </button>
-                      );
-                    })}
-                </div>
-
-                {/* Quick Font & Bg Color & Shape/Tail for activeBatchSide */}
-                <div className="space-y-2.5 pt-1 border-t border-stone-100">
-                  <FontSelectDropdown
-                    fonts={fonts}
-                    value={defaultSideStyles[activeBatchSide].fontFamily}
-                    onChange={(fontFamily) =>
-                      onUpdateSideStyle(activeBatchSide, { fontFamily })
-                    }
-                  />
-
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-[11px] font-semibold text-stone-600">
-                      말풍선 모양
-                    </span>
-                    <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onUpdateSideStyle(activeBatchSide, {
-                            bubbleShape: 'default',
-                          })
-                        }
-                        className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                          (defaultSideStyles[activeBatchSide].bubbleShape ||
-                            'default') === 'default'
-                            ? 'bg-stone-900 text-white shadow-sm'
-                            : 'text-stone-600'
-                        }`}
-                      >
-                        일반 말풍선
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onUpdateSideStyle(activeBatchSide, {
-                            bubbleShape: 'cloud',
-                          })
-                        }
-                        className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                          defaultSideStyles[activeBatchSide].bubbleShape ===
-                          'cloud'
-                            ? 'bg-stone-900 text-white shadow-sm'
-                            : 'text-stone-600'
-                        }`}
-                      >
-                        구름 말풍선
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-[11px] font-semibold text-stone-600">
-                      말풍선 꼬리
-                    </span>
-                    <div className="flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onUpdateSideStyle(activeBatchSide, { hasTail: true })
-                        }
-                        className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                          (defaultSideStyles[activeBatchSide].hasTail ??
-                            activeBatchSide !== 'center')
-                            ? 'bg-stone-900 text-white shadow-sm'
-                            : 'text-stone-600'
-                        }`}
-                      >
-                        ON
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onUpdateSideStyle(activeBatchSide, { hasTail: false })
-                        }
-                        className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                          !(defaultSideStyles[activeBatchSide].hasTail ??
-                            activeBatchSide !== 'center')
-                            ? 'bg-stone-900 text-white shadow-sm'
-                            : 'text-stone-600'
-                        }`}
-                      >
-                        OFF
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    {renderCollapsibleSlider({
-                      sliderKey: 'batch-fontSize',
-                      label: '글자 크기',
-                      displayValue: `${defaultSideStyles[activeBatchSide].fontSize}px`,
-                      value: defaultSideStyles[activeBatchSide].fontSize,
-                      min: 12,
-                      max: 44,
-                      step: 1,
-                      onChange: (fontSize) =>
-                        onUpdateSideStyle(activeBatchSide, { fontSize }),
-                    })}
-
-                    {renderCollapsibleSlider({
-                      sliderKey: 'batch-textOffsetY',
-                      label: '텍스트 상하 위치',
-                      displayValue:
-                        (defaultSideStyles[activeBatchSide].textOffsetY ?? 0) > 0
-                          ? `+${defaultSideStyles[activeBatchSide].textOffsetY}px`
-                          : `${defaultSideStyles[activeBatchSide].textOffsetY ?? 0}px`,
-                      value: defaultSideStyles[activeBatchSide].textOffsetY ?? 0,
-                      min: -12,
-                      max: 12,
-                      step: 0.5,
-                      onChange: (textOffsetY) =>
-                        onUpdateSideStyle(activeBatchSide, { textOffsetY }),
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 5. CANVAS BACKGROUND & TEXTURE POPOVER */}
+          {/* 5. CANVAS BACKGROUND & TEXTURE POPOVER (종이 질감 효과 밑에 상/하단 구분선 추가) */}
           {openTool === 'canvasBg' && (
             <div className="flex flex-col max-h-[42vh]">
               <div className="flex items-center justify-between border-b border-stone-200/80 px-3.5 py-2 bg-stone-50/90">
                 <span className="text-xs font-bold text-stone-800">
-                  카드 배경색 · 이미지 · 종이 질감
+                  배경지
                 </span>
                 <button
                   type="button"
@@ -1865,32 +1736,12 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                     ))}
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
 
-          {/* 6. CANVAS LAYOUT & DIVIDERS POPOVER */}
-          {openTool === 'canvasLayout' && (
-            <div className="flex flex-col max-h-[42vh]">
-              <div className="flex items-center justify-between border-b border-stone-200/80 px-3.5 py-2 bg-stone-50/90">
-                <span className="text-xs font-bold text-stone-800">
-                  구분선 · 카드 규격 · 머리말
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setOpenTool(null)}
-                  className="flex h-6 w-6 items-center justify-center rounded-full text-stone-500 hover:bg-stone-200/70"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              <div className="overflow-y-auto p-3.5 space-y-3">
-                {/* Top/Bottom Dividers */}
-                <div className="rounded-xl border border-stone-200 bg-stone-50/70 p-2.5 space-y-2">
-                  <div className="flex items-center justify-between">
+                {/* Top/Bottom Dividers (종이질감효과 밑에 상하단 구분선 추가) */}
+                <div className="border-y border-stone-200 py-2.5 space-y-2">
+                  <label className="flex items-center justify-between cursor-pointer">
                     <span className="text-xs font-semibold text-stone-700">
-                      상/하단 구분선 표시
+                      상/하단 구분선
                     </span>
                     <input
                       type="checkbox"
@@ -1900,10 +1751,10 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                       }
                       className="h-4 w-4 accent-stone-900 rounded"
                     />
-                  </div>
+                  </label>
 
                   {canvasConfig.showDividers && (
-                    <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-stone-200/80 text-xs">
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-stone-100 text-xs">
                       <div className="flex gap-1">
                         {(['solid', 'dashed', 'double'] as const).map(
                           (style) => (
@@ -1949,56 +1800,50 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
 
-                {/* Card dimensions & Bubble spacing (tap to reveal slider) */}
-                <div className="grid grid-cols-2 gap-2">
-                  {renderCollapsibleSlider({
-                    sliderKey: 'canvas-width',
-                    label: '카드 가로폭',
-                    displayValue: `${canvasConfig.width}px`,
-                    value: canvasConfig.width,
-                    min: 480,
-                    max: 1080,
-                    step: 10,
-                    onChange: (width) => onUpdateCanvasConfig({ width }),
-                  })}
+          {/* 6. CANVAS LAYOUT & HEADER/FOOTER POPOVER */}
+          {openTool === 'canvasLayout' && (
+            <div className="flex flex-col max-h-[42vh]">
+              <div className="flex items-center justify-between border-b border-stone-200/80 px-3.5 py-2 bg-stone-50/90">
+                <span className="text-xs font-bold text-stone-800">
+                  머릿말 · 꼬리말 · 카드 크기 조절
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setOpenTool(null)}
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-stone-500 hover:bg-stone-200/70"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
 
-                  {renderCollapsibleSlider({
-                    sliderKey: 'canvas-bubbleSpacing',
-                    label: '말풍선 간격',
-                    displayValue: `${canvasConfig.bubbleSpacing}px`,
-                    value: canvasConfig.bubbleSpacing,
-                    min: 8,
-                    max: 56,
-                    step: 1,
-                    onChange: (bubbleSpacing) =>
-                      onUpdateCanvasConfig({ bubbleSpacing }),
-                  })}
-                </div>
-
-                {/* Header / Footer toggles */}
-                <div className="space-y-2.5 pt-1 border-t border-stone-100">
-                  <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50/70 p-2.5">
+              <div className="overflow-y-auto p-3.5 space-y-3">
+                {/* 머릿말 & 꼬리말 */}
+                <div className="divide-y divide-stone-200 border-y border-stone-200">
+                  <div className="space-y-2 py-2.5">
                     <label className="flex items-center justify-between text-xs font-semibold text-stone-700 cursor-pointer">
-                      <span>상단 머릿말</span>
+                      <span>머릿말</span>
                       <input
                         type="checkbox"
                         checked={canvasConfig.showHeader}
                         onChange={(e) =>
                           onUpdateCanvasConfig({ showHeader: e.target.checked })
                         }
-                        className="h-3.5 w-3.5 accent-stone-900"
+                        className="h-3.5 w-3.5 accent-stone-900 rounded"
                       />
                     </label>
                     {canvasConfig.showHeader && (
-                      <div className="space-y-2 pt-1.5 border-t border-stone-200/80">
+                      <div className="space-y-2 pt-1.5 border-t border-stone-100">
                         <input
                           type="text"
                           value={canvasConfig.headerText}
                           onChange={(e) =>
                             onUpdateCanvasConfig({ headerText: e.target.value })
                           }
-                          placeholder="상단 머릿말 입력"
+                          placeholder="머릿말 문구 입력"
                           className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs"
                         />
                         <FontSelectDropdown
@@ -2065,27 +1910,27 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                     )}
                   </div>
 
-                  <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50/70 p-2.5">
+                  <div className="space-y-2 py-2.5">
                     <label className="flex items-center justify-between text-xs font-semibold text-stone-700 cursor-pointer">
-                      <span>하단 머릿말 (꼬리말)</span>
+                      <span>꼬리말</span>
                       <input
                         type="checkbox"
                         checked={canvasConfig.showFooter}
                         onChange={(e) =>
                           onUpdateCanvasConfig({ showFooter: e.target.checked })
                         }
-                        className="h-3.5 w-3.5 accent-stone-900"
+                        className="h-3.5 w-3.5 accent-stone-900 rounded"
                       />
                     </label>
                     {canvasConfig.showFooter && (
-                      <div className="space-y-2 pt-1.5 border-t border-stone-200/80">
+                      <div className="space-y-2 pt-1.5 border-t border-stone-100">
                         <input
                           type="text"
                           value={canvasConfig.footerText}
                           onChange={(e) =>
                             onUpdateCanvasConfig({ footerText: e.target.value })
                           }
-                          placeholder="하단 머릿말 입력"
+                          placeholder="꼬리말 문구 입력"
                           className="w-full rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs"
                         />
                         <FontSelectDropdown
@@ -2152,6 +1997,103 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                     )}
                   </div>
                 </div>
+
+                {/* 카드 크기 조절 (대화 너비, 카드 크기 조절, 말풍선 간격 묶어서 접기) */}
+                <div className="border-b border-stone-200 pb-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsCardSizeGroupOpen((prev) => !prev)}
+                    className="flex w-full items-center justify-between text-left cursor-pointer py-1"
+                  >
+                    <span className="text-xs font-semibold text-stone-700">
+                      카드 크기 조절
+                    </span>
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 text-stone-400 transition-transform duration-200 ${
+                        isCardSizeGroupOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {isCardSizeGroupOpen && (
+                    <div className="space-y-2.5 pt-2.5">
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onUpdateCanvasConfig({ width: 640 })}
+                          className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
+                            canvasConfig.width === 640
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-200 bg-white text-stone-700'
+                          }`}
+                        >
+                          기본 (640px)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onUpdateCanvasConfig({ width: 760 })}
+                          className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
+                            canvasConfig.width === 760
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-200 bg-white text-stone-700'
+                          }`}
+                        >
+                          넓게 (760px)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onUpdateCanvasConfig({ width: 880 })}
+                          className={`rounded-lg border py-1.5 text-[11px] font-medium transition ${
+                            canvasConfig.width === 880
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-200 bg-white text-stone-700'
+                          }`}
+                        >
+                          와이드 (880px)
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        {renderCollapsibleSlider({
+                          sliderKey: 'canvas-dividerWidth',
+                          label: '대화 너비',
+                          displayValue: `${canvasConfig.dividerWidth}%`,
+                          value: canvasConfig.dividerWidth,
+                          min: 60,
+                          max: 96,
+                          step: 1,
+                          onChange: (dividerWidth) =>
+                            onUpdateCanvasConfig({ dividerWidth }),
+                        })}
+
+                        {renderCollapsibleSlider({
+                          sliderKey: 'canvas-width',
+                          label: '카드 크기 조절',
+                          displayValue: `${canvasConfig.width}px`,
+                          value: canvasConfig.width,
+                          min: 480,
+                          max: 1080,
+                          step: 10,
+                          onChange: (width) => onUpdateCanvasConfig({ width }),
+                        })}
+
+                        <div className="col-span-2">
+                          {renderCollapsibleSlider({
+                            sliderKey: 'canvas-bubbleSpacing',
+                            label: '말풍선 간격',
+                            displayValue: `${canvasConfig.bubbleSpacing}px`,
+                            value: canvasConfig.bubbleSpacing,
+                            min: 8,
+                            max: 56,
+                            step: 1,
+                            onChange: (bubbleSpacing) =>
+                              onUpdateCanvasConfig({ bubbleSpacing }),
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -2174,13 +2116,8 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                     : 'text-stone-600 hover:bg-stone-100 active:bg-stone-200/70'
                 }`}
               >
-                <div className="flex items-center gap-0.5">
+                <div className="flex items-center justify-center">
                   {tool.icon}
-                  {isActive ? (
-                    <ChevronDown className="h-2.5 w-2.5 opacity-80" />
-                  ) : (
-                    <ChevronUp className="h-2.5 w-2.5 opacity-40" />
-                  )}
                 </div>
                 <span className="text-[10px] font-medium whitespace-nowrap leading-tight">
                   {tool.label}
