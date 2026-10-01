@@ -147,6 +147,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
 
     isPointerDownInBubbleRef.current = true;
     isTextDraggingRef.current = false;
+    textEditableRef.current?.removeAttribute('data-ps-color-active');
 
     // If user already has an active text selection inside the document, do not trigger long-press drag
     const activeSel = window.getSelection();
@@ -218,6 +219,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     const startY = touch.clientY;
     isPointerDownInBubbleRef.current = true;
     isTextDraggingRef.current = false;
+    textEditableRef.current?.removeAttribute('data-ps-color-active');
 
     clearLongPressTimer();
     pointerStartRef.current = { x: startX, y: startY };
@@ -410,8 +412,20 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
 
   useEffect(() => {
     const handleDocSelectionChange = () => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (
+        activeEl &&
+        (activeEl.closest('#floating-text-toolbar') ||
+          activeEl.closest('#inspector-sidebar') ||
+          activeEl.closest('#mobile-bottom-toolbar') ||
+          activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'SELECT')
+      ) {
+        return;
+      }
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed) {
+        textEditableRef.current?.removeAttribute('data-ps-color-active');
         setFloatingToolbarPos(null);
         return;
       }

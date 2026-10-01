@@ -11,6 +11,17 @@ export function recordSelection(bubbleId: string) {
   try {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (
+        activeEl &&
+        (activeEl.closest('#floating-text-toolbar') ||
+          activeEl.closest('#inspector-sidebar') ||
+          activeEl.closest('#mobile-bottom-toolbar') ||
+          activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'SELECT')
+      ) {
+        return;
+      }
       if (savedBubbleId === bubbleId) {
         savedRange = null;
         savedBubbleId = null;
@@ -253,8 +264,94 @@ export function hasInlineTextFormatting(
  * Clear saved selection
  */
 export function clearSavedSelection() {
+  if (savedBubbleId && typeof document !== 'undefined') {
+    const el = document.getElementById(`bubble-text-${savedBubbleId}`);
+    el?.removeAttribute('data-ps-color-active');
+  }
   savedRange = null;
   savedBubbleId = null;
+}
+
+function rgbOrCssColorToHex(cssColor: string): string | null {
+  if (!cssColor) return null;
+  const trimmed = cssColor.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+    return trimmed;
+  }
+  if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
+    const r = trimmed[1];
+    const g = trimmed[2];
+    const b = trimmed[3];
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  const rgbMatch = trimmed.match(
+    /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i
+  );
+  if (rgbMatch) {
+    const r = Math.min(255, Math.max(0, parseInt(rgbMatch[1], 10)));
+    const g = Math.min(255, Math.max(0, parseInt(rgbMatch[2], 10)));
+    const b = Math.min(255, Math.max(0, parseInt(rgbMatch[3], 10)));
+    return (
+      '#' +
+      [r, g, b]
+        .map((n) => n.toString(16).padStart(2, '0'))
+        .join('')
+    );
+  }
+  return null;
+}
+
+/**
+ * Returns the effective hex text color of the currently selected text inside a bubble, if any.
+ */
+export function getSelectionTextColor(bubbleId: string): string | null {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return null;
+  }
+  const range = getSelectionWithinBubble(bubbleId);
+  if (!range || range.collapsed || range.toString().trim().length === 0) {
+    return null;
+  }
+  const container = document.getElementById(`bubble-text-${bubbleId}`);
+  if (!container) return null;
+
+  let targetEl: HTMLElement | null = null;
+  const startNode = range.startContainer;
+  if (startNode.nodeType === Node.TEXT_NODE) {
+    targetEl = startNode.parentElement;
+  } else if (startNode instanceof HTMLElement) {
+    const child = startNode.childNodes[range.startOffset];
+    if (child instanceof HTMLElement) {
+      targetEl = child;
+    } else if (child && child.parentElement) {
+      targetEl = child.parentElement;
+    } else {
+      targetEl = startNode;
+    }
+  }
+
+  while (targetEl && container.contains(targetEl)) {
+    if (targetEl.style && targetEl.style.color) {
+      const hex = rgbOrCssColorToHex(targetEl.style.color);
+      if (hex) return hex;
+    }
+    if (targetEl.tagName.toLowerCase() === 'font') {
+      const attrColor = targetEl.getAttribute('color');
+      if (attrColor) {
+        const hex = rgbOrCssColorToHex(attrColor);
+        if (hex) return hex;
+      }
+    }
+    if (targetEl === container) break;
+    targetEl = targetEl.parentElement;
+  }
+
+  const computed = window.getComputedStyle(
+    startNode.nodeType === Node.TEXT_NODE
+      ? startNode.parentElement || container
+      : (startNode as HTMLElement)
+  ).color;
+  return rgbOrCssColorToHex(computed);
 }
 
 /**
@@ -343,15 +440,27 @@ export function formatSelection(
     return false;
   }
 
-  // Ensure selection is active in DOM
+  // Ensure selection is active in DOM when not actively dragging a native input control
+  const activeEl = document.activeElement as HTMLElement | null;
+  const isUsingInputControl =
+    activeEl &&
+    (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT');
+
   const sel = window.getSelection();
-  if (sel) {
+  if (sel && !isUsingInputControl) {
     sel.removeAllRanges();
     sel.addRange(range);
   }
 
-  // Focus container
-  container.focus();
+  if (!isUsingInputControl) {
+    container.focus();
+  }
+
+  if (options.color) {
+    container.setAttribute('data-ps-color-active', 'true');
+  } else if (options.command === 'removeFormat') {
+    container.removeAttribute('data-ps-color-active');
+  }
 
   let executed = false;
 
@@ -481,13 +590,15 @@ export function formatSelection(
       }
 
       // 4. Reselect the newly styled content
-      if (sel && targetSpan) {
-        sel.removeAllRanges();
+      if (targetSpan) {
         const newRange = document.createRange();
         newRange.selectNodeContents(targetSpan);
-        sel.addRange(newRange);
         savedRange = newRange.cloneRange();
         savedBubbleId = bubbleId;
+        if (sel && !isUsingInputControl) {
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+        }
       }
       executed = true;
     } catch {
@@ -507,10 +618,17 @@ export function formatSelection(
     if (onContentChange) {
       onContentChange(updatedHtml, updatedText);
     }
-    // Update saved range
-    if (sel && sel.rangeCount > 0) {
-      savedRange = sel.getRangeAt(0).cloneRange();
-      savedBubbleId = bubbleId;
+    // Update saved range if browser selection is currently active inside the bubble
+    if (sel && sel.rangeCount > 0 && !isUsingInputControl) {
+      const currentRange = sel.getRangeAt(0);
+      if (
+        !currentRange.collapsed &&
+        (container.contains(currentRange.commonAncestorContainer) ||
+          container === currentRange.commonAncestorContainer)
+      ) {
+        savedRange = currentRange.cloneRange();
+        savedBubbleId = bubbleId;
+      }
     }
   }
 

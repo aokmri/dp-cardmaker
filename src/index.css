@@ -40,3 +40,19 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #a8a29e;
 }
+
+/* Preserve the actual text color inside speech bubble selections instead of forcing black */
+[contenteditable]::selection,
+[contenteditable] *::selection {
+  background-color: rgba(245, 158, 11, 0.22);
+}
+
+/* Photoshop-style color change preview: hide solid highlight fill so the newly applied
+   text color is 100% clear against the bubble background while keeping a subtle selection underline */
+[contenteditable][data-ps-color-active="true"]::selection,
+[contenteditable][data-ps-color-active="true"] *::selection {
+  background-color: rgba(120, 113, 108, 0.07);
+  text-decoration: underline dashed rgba(217, 119, 6, 0.65);
+  text-underline-offset: 3px;
+}
+

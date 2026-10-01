@@ -29,6 +29,7 @@ import {
 import {
   clearSavedSelection,
   formatSelection,
+  getSelectionTextColor,
   getSelectionWithinBubble,
   hasInlineTextFormatting,
   stripAllInlineFormattingFromHtml,
@@ -807,36 +808,56 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
                     {/* Text Color */}
                     <div className="pt-3.5 border-t border-stone-200">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-stone-700">글자 색상</label>
-                      </div>
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={selectedBubble.color}
-                          onChange={(e) => handleTextColor(e.target.value)}
-                          className="h-8 w-8 cursor-pointer rounded border border-stone-200 p-0.5"
-                        />
-                        <div className="flex flex-1 flex-wrap gap-1">
-                          {COLOR_PALETTE.text.map((c) => (
-                            <button
-                              key={c.value}
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                handleTextColor(c.value);
-                              }}
-                              style={{ backgroundColor: c.value }}
-                              title={c.label}
-                              className={`h-6 w-6 rounded-full border border-stone-300 transition-transform ${
-                                selectedBubble.color.toLowerCase() === c.value.toLowerCase()
-                                  ? 'scale-110 ring-2 ring-stone-900'
-                                  : 'hover:scale-105'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </div>
+                      {(() => {
+                        const selectionColor = getSelectionTextColor(selectedBubble.id);
+                        const displayedTextColor = selectionColor || selectedBubble.color;
+                        return (
+                          <>
+                            <div className="flex items-center justify-between">
+                              <label className="text-xs font-semibold text-stone-700">
+                                글자 색상
+                              </label>
+                              {selectionColor && (
+                                <span className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
+                                  <span
+                                    className="h-2.5 w-2.5 rounded-full border border-black/15"
+                                    style={{ backgroundColor: selectionColor }}
+                                  />
+                                  선택 글자: {selectionColor.toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <input
+                                type="color"
+                                value={displayedTextColor}
+                                onChange={(e) => handleTextColor(e.target.value)}
+                                className="h-8 w-8 cursor-pointer rounded border border-stone-200 p-0.5"
+                              />
+                              <div className="flex flex-1 flex-wrap gap-1">
+                                {COLOR_PALETTE.text.map((c) => (
+                                  <button
+                                    key={c.value}
+                                    type="button"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      handleTextColor(c.value);
+                                    }}
+                                    style={{ backgroundColor: c.value }}
+                                    title={c.label}
+                                    className={`h-6 w-6 rounded-full border border-stone-300 transition-transform cursor-pointer ${
+                                      displayedTextColor.toLowerCase() ===
+                                      c.value.toLowerCase()
+                                        ? 'scale-110 ring-2 ring-stone-900'
+                                        : 'hover:scale-105'
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
 
                     {/* Collapsible 글자 간격 (자간 / 행간 / 텍스트 상하 위치) */}

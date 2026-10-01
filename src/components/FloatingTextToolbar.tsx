@@ -4,14 +4,13 @@ import {
   Italic,
   Underline,
   Strikethrough,
-  Palette,
   Eraser,
   Type,
   ChevronDown,
 } from 'lucide-react';
 import { WebFont } from '../types';
 import { COLOR_PALETTE } from '../data/presetFonts';
-import { formatSelection } from '../utils/richText';
+import { formatSelection, getSelectionTextColor } from '../utils/richText';
 
 interface FloatingTextToolbarProps {
   bubbleId: string;
@@ -31,16 +30,22 @@ export const FloatingTextToolbar: React.FC<FloatingTextToolbarProps> = ({
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showSizePicker, setShowSizePicker] = useState(false);
   const [showFontPicker, setShowFontPicker] = useState(false);
+  const [activeSelectionColor, setActiveSelectionColor] = useState<string | null>(
+    () => getSelectionTextColor(bubbleId)
+  );
 
   const handleCommand = (
     command: 'bold' | 'italic' | 'underline' | 'strikeThrough' | 'removeFormat'
   ) => {
     formatSelection(bubbleId, { command }, onUpdateContent);
+    if (command === 'removeFormat') {
+      setActiveSelectionColor(getSelectionTextColor(bubbleId));
+    }
   };
 
   const handleColor = (color: string) => {
     formatSelection(bubbleId, { color }, onUpdateContent);
-    setShowColorPicker(false);
+    setActiveSelectionColor(color);
   };
 
   const handleFontSize = (size: number) => {
@@ -127,16 +132,24 @@ export const FloatingTextToolbar: React.FC<FloatingTextToolbarProps> = ({
           type="button"
           onMouseDown={(e) => {
             e.preventDefault();
+            const detected = getSelectionTextColor(bubbleId);
+            if (detected) setActiveSelectionColor(detected);
             setShowColorPicker(!showColorPicker);
             setShowSizePicker(false);
             setShowFontPicker(false);
           }}
-          className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition ${
+          className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition ${
             showColorPicker ? 'bg-stone-700 text-amber-300' : 'text-stone-200 hover:bg-stone-700'
           }`}
           title="선택 글자 색상 변경"
         >
-          <Palette className="h-3.5 w-3.5" />
+          <span
+            className="h-3.5 w-3.5 rounded-full border border-white/60 shadow-2xs shrink-0"
+            style={{
+              backgroundColor:
+                activeSelectionColor || getSelectionTextColor(bubbleId) || '#2B2623',
+            }}
+          />
           <span className="text-[11px]">색상</span>
         </button>
 
@@ -145,35 +158,59 @@ export const FloatingTextToolbar: React.FC<FloatingTextToolbarProps> = ({
             className="absolute left-0 top-full mt-2 z-50 w-52 rounded-xl border border-stone-200 bg-white p-3 text-stone-900 shadow-xl animate-in fade-in duration-100"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-2 text-[11px] font-semibold text-stone-500">선택 영역 글자색</div>
+            <div className="mb-2 flex items-center justify-between text-[11px] font-semibold text-stone-500">
+              <span>선택 영역 글자색</span>
+              {activeSelectionColor && (
+                <span className="font-mono text-[10px] text-stone-700 uppercase">
+                  {activeSelectionColor}
+                </span>
+              )}
+            </div>
             <div className="grid grid-cols-4 gap-1.5 mb-2.5">
-              {COLOR_PALETTE.text.map((c) => (
-                <button
-                  key={c.value}
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    handleColor(c.value);
-                  }}
-                  className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-stone-100 transition"
-                  title={c.label}
-                >
-                  <span
-                    className="h-4 w-4 rounded-full border border-black/10 shadow-2xs"
-                    style={{ backgroundColor: c.value }}
-                  />
-                  <span className="text-[9px] text-stone-600 truncate max-w-full">
-                    {c.label}
-                  </span>
-                </button>
-              ))}
+              {COLOR_PALETTE.text.map((c) => {
+                const isCurrentColor =
+                  (activeSelectionColor || '').toLowerCase() ===
+                  c.value.toLowerCase();
+                return (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleColor(c.value);
+                    }}
+                    className={`flex flex-col items-center gap-1 rounded-lg p-1.5 transition cursor-pointer ${
+                      isCurrentColor
+                        ? 'bg-amber-50 ring-1 ring-amber-400'
+                        : 'hover:bg-stone-100'
+                    }`}
+                    title={c.label}
+                  >
+                    <span
+                      className={`h-4 w-4 rounded-full border border-black/10 shadow-2xs transition-transform ${
+                        isCurrentColor ? 'scale-110 ring-2 ring-stone-900' : ''
+                      }`}
+                      style={{ backgroundColor: c.value }}
+                    />
+                    <span className="text-[9px] text-stone-600 truncate max-w-full">
+                      {c.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="flex items-center justify-between border-t border-stone-100 pt-2 text-xs">
               <span className="text-stone-600 text-[11px]">직접 선택:</span>
               <input
                 type="color"
-                defaultValue="#C84B31"
+                value={
+                  activeSelectionColor &&
+                  activeSelectionColor.startsWith('#') &&
+                  activeSelectionColor.length === 7
+                    ? activeSelectionColor
+                    : '#C84B31'
+                }
                 onChange={(e) => handleColor(e.target.value)}
                 className="h-6 w-10 cursor-pointer rounded border border-stone-200 p-0.5"
               />

@@ -43,6 +43,7 @@ import { FontPasteMatcher } from './FontPasteMatcher';
 import {
   clearSavedSelection,
   formatSelection,
+  getSelectionTextColor,
   getSelectionWithinBubble,
   hasInlineTextFormatting,
   stripAllInlineFormattingFromHtml,
@@ -907,41 +908,62 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
 
                 {/* 5) 글자 색상 */}
                 <div className="space-y-1.5 pt-2 border-t border-stone-100">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-stone-700">
-                      글자 색상
-                    </span>
-                    <span className="font-mono text-[10px] text-stone-400">
-                      {activeStyle.color}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {COLOR_PALETTE.text.map((c) => (
-                      <button
-                        key={c.value}
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => handleTextColor(c.value)}
-                        title={c.label}
-                        style={{ backgroundColor: c.value }}
-                        className={`h-7 w-7 rounded-full border border-stone-300 transition-transform ${
-                          activeStyle.color.toLowerCase() ===
-                          c.value.toLowerCase()
-                            ? 'scale-110 ring-2 ring-stone-900 ring-offset-1'
-                            : ''
-                        }`}
-                      />
-                    ))}
-                    <label className="flex items-center gap-1 rounded-lg border border-stone-200 bg-stone-50 px-2 py-1 text-[11px] text-stone-700 cursor-pointer">
-                      <input
-                        type="color"
-                        value={activeStyle.color}
-                        onChange={(e) => handleTextColor(e.target.value)}
-                        className="h-4 w-4 border-0 bg-transparent p-0"
-                      />
-                      <span>직접 선택</span>
-                    </label>
-                  </div>
+                  {(() => {
+                    const selectionColor =
+                      isEditingSingle && selectedBubble
+                        ? getSelectionTextColor(selectedBubble.id)
+                        : null;
+                    const displayedTextColor = selectionColor || activeStyle.color;
+                    return (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-stone-700">
+                            글자 색상
+                          </span>
+                          {selectionColor ? (
+                            <span className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
+                              <span
+                                className="h-2.5 w-2.5 rounded-full border border-black/15"
+                                style={{ backgroundColor: selectionColor }}
+                              />
+                              선택 글자: {selectionColor.toUpperCase()}
+                            </span>
+                          ) : (
+                            <span className="font-mono text-[10px] text-stone-400">
+                              {activeStyle.color}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {COLOR_PALETTE.text.map((c) => (
+                            <button
+                              key={c.value}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => handleTextColor(c.value)}
+                              title={c.label}
+                              style={{ backgroundColor: c.value }}
+                              className={`h-7 w-7 rounded-full border border-stone-300 transition-transform ${
+                                displayedTextColor.toLowerCase() ===
+                                c.value.toLowerCase()
+                                  ? 'scale-110 ring-2 ring-stone-900 ring-offset-1'
+                                  : ''
+                              }`}
+                            />
+                          ))}
+                          <label className="flex items-center gap-1 rounded-lg border border-stone-200 bg-stone-50 px-2 py-1 text-[11px] text-stone-700 cursor-pointer">
+                            <input
+                              type="color"
+                              value={displayedTextColor}
+                              onChange={(e) => handleTextColor(e.target.value)}
+                              className="h-4 w-4 border-0 bg-transparent p-0"
+                            />
+                            <span>직접 선택</span>
+                          </label>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* 6) 글자 간격 (자간, 행간, 텍스트 상하 위치) - 기본 접어두기 */}
