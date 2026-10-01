@@ -32,8 +32,12 @@ import {
   getSelectionTextColor,
   getSelectionWithinBubble,
   hasInlineTextFormatting,
+  hasSpoilerInHtml,
+  isSelectionSpoiler,
+  selectBubbleRangeByTextOffsets,
   stripAllInlineFormattingFromHtml,
   stripInlineFontFamilyFromHtml,
+  toggleSpoilerInBubble,
 } from '../utils/richText';
 import { BatchSideStylePanel } from './BatchSideStylePanel';
 import { FontPasteMatcher } from './FontPasteMatcher';
@@ -97,6 +101,11 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [activeBatchSide, setActiveBatchSide] = useState<'left' | 'center' | 'right'>('left');
+  const contentTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const textareaSelectionRef = React.useRef<{ start: number; end: number }>({
+    start: 0,
+    end: 0,
+  });
 
   // Collapsible category states for Single Edit (개별 편집)
   const [isSingleTextOpen, setIsSingleTextOpen] = useState(true);
@@ -126,6 +135,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
     if (domEl && cleanedHtml !== undefined) {
       domEl.innerHTML = cleanedHtml;
     }
+    const restoredText = domEl ? domEl.innerText : selectedBubble.text;
     onUpdateBubble({
       align: side,
       fontFamily: style.fontFamily,
@@ -158,6 +168,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
       metaFontFamily: style.metaFontFamily || DEFAULT_META_FONT_FAMILY,
       metaColor:
         style.metaColor || (side === 'right' ? '#cdaf77' : '#777674'),
+      text: restoredText,
       ...(cleanedHtml !== undefined ? { html: cleanedHtml } : {}),
       customStyleKeys: [],
     });
@@ -269,6 +280,23 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         ...(cleanedHtml !== undefined ? { html: cleanedHtml } : {}),
       });
     }
+  };
+
+  const handleToggleSpoiler = () => {
+    if (!selectedBubble) return;
+    const canvasSel = getSelectionWithinBubble(selectedBubble.id);
+    if (!canvasSel || canvasSel.collapsed || canvasSel.toString().length === 0) {
+      const ta = contentTextareaRef.current;
+      const start = ta ? ta.selectionStart : textareaSelectionRef.current.start;
+      const end = ta ? ta.selectionEnd : textareaSelectionRef.current.end;
+      if (start !== end) {
+        selectBubbleRangeByTextOffsets(selectedBubble.id, start, end);
+        textareaSelectionRef.current = { start: 0, end: 0 };
+      }
+    }
+    toggleSpoilerInBubble(selectedBubble.id, (newHtml, newText) => {
+      onUpdateBubble({ html: newHtml, text: newText });
+    });
   };
 
   const currentBatchStyle =
@@ -604,8 +632,15 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-stone-700">내용</label>
                 <textarea
+                  ref={contentTextareaRef}
                   rows={3}
                   value={selectedBubble.text}
+                  onSelect={(e) => {
+                    textareaSelectionRef.current = {
+                      start: e.currentTarget.selectionStart,
+                      end: e.currentTarget.selectionEnd,
+                    };
+                  }}
                   onChange={(e) =>
                     onUpdateBubble({
                       text: e.target.value,
@@ -785,6 +820,27 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                           title="텍스트 우측 정렬"
                         >
                           <AlignRight className="h-3.5 w-3.5" />
+                        </button>
+
+                        <div className="mx-1 h-4 w-[1px] bg-stone-300" />
+
+                        {/* Spoiler (스포방지) */}
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleToggleSpoiler();
+                          }}
+                          className={`flex items-center gap-1 whitespace-nowrap rounded px-2 py-1 text-[11px] font-semibold transition cursor-pointer ${
+                            isSelectionSpoiler(selectedBubble.id) ||
+                            hasSpoilerInHtml(selectedBubble.html)
+                              ? 'bg-stone-900 text-white shadow-xs'
+                              : 'text-stone-700 hover:bg-stone-200/60'
+                          }`}
+                          title="글자 드래그 후 스포방지 설정 (■ 표기) / 클릭 시 해제"
+                        >
+                          <span className="text-[10px] leading-none">■</span>
+                          <span>스포방지</span>
                         </button>
                       </div>
                     </div>

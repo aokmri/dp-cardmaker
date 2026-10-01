@@ -46,8 +46,11 @@ import {
   getSelectionTextColor,
   getSelectionWithinBubble,
   hasInlineTextFormatting,
+  hasSpoilerInHtml,
+  isSelectionSpoiler,
   stripAllInlineFormattingFromHtml,
   stripInlineFontFamilyFromHtml,
+  toggleSpoilerInBubble,
 } from '../utils/richText';
 
 export type MobileToolId =
@@ -379,6 +382,13 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
     onUpdateSideStyle(activeBatchSide, { fontFamily });
   };
 
+  const handleToggleSpoiler = () => {
+    if (!isEditingSingle || !selectedBubble) return;
+    toggleSpoilerInBubble(selectedBubble.id, (newHtml, newText) => {
+      onUpdateBubble({ html: newHtml, text: newText });
+    });
+  };
+
   const handleResetSelectedToDefault = () => {
     if (!selectedBubble) return;
     clearSavedSelection();
@@ -389,6 +399,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
     if (domEl && cleanedHtml !== undefined) {
       domEl.innerHTML = cleanedHtml;
     }
+    const restoredText = domEl ? domEl.innerText : selectedBubble.text;
     onUpdateBubble({
       fontFamily: style.fontFamily,
       fontSize: style.fontSize,
@@ -421,6 +432,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
       metaColor:
         style.metaColor ||
         (selectedBubble.align === 'right' ? '#cdaf77' : '#777674'),
+      text: restoredText,
       ...(cleanedHtml !== undefined ? { html: cleanedHtml } : {}),
       customStyleKeys: [],
     });
@@ -824,9 +836,30 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
 
                 {/* 3) 서식 (굵게/기울임/밑줄/취소선 + 정렬) */}
                 <div className="space-y-1.5 pt-2 border-t border-stone-100">
-                  <span className="block text-[11px] font-semibold text-stone-700">
-                    서식
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="block text-[11px] font-semibold text-stone-700">
+                      서식
+                    </span>
+                    {isEditingSingle && selectedBubble && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleToggleSpoiler();
+                        }}
+                        className={`inline-flex items-center gap-1 whitespace-nowrap rounded-lg border px-2 py-0.5 text-[11px] font-semibold transition ${
+                          isSelectionSpoiler(selectedBubble.id) ||
+                          hasSpoilerInHtml(selectedBubble.html)
+                            ? 'border-stone-900 bg-stone-900 text-white'
+                            : 'border-stone-200 bg-white text-stone-700 active:bg-stone-100'
+                        }`}
+                        title="글자 드래그 후 스포방지 설정 (■ 표기) / 해제"
+                      >
+                        <span className="text-[10px] leading-none">■</span>
+                        <span>스포방지</span>
+                      </button>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1.5">
                     <div className="grid grid-cols-4 gap-1 flex-1">
                       <button

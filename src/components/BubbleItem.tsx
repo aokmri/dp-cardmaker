@@ -2,7 +2,12 @@ import React, { useRef, useState, useEffect, useLayoutEffect, useCallback } from
 import { Trash2, Copy, ArrowLeftRight, GripVertical } from 'lucide-react';
 import { Bubble, WebFont } from '../types';
 import { FloatingTextToolbar } from './FloatingTextToolbar';
-import { recordSelection, getSelectionWithinBubble } from '../utils/richText';
+import {
+  recordSelection,
+  getSelectionWithinBubble,
+  getClampedRangeInBubble,
+  setSavedSelectionRange,
+} from '../utils/richText';
 import { buildPasteContentFromClipboard } from '../utils/pasteFormatter';
 import { CloudBubbleBackground } from '../utils/cloudBubble';
 
@@ -56,7 +61,9 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
   const longPressTimerRef = useRef<number | null>(null);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const isTextDraggingRef = useRef<boolean>(false);
+  const didDragTextRef = useRef<boolean>(false);
   const isPointerDownInBubbleRef = useRef<boolean>(false);
+  const lastValidDragRangeRef = useRef<Range | null>(null);
   const [floatingToolbarPos, setFloatingToolbarPos] = useState<{
     top: number;
     left: number;
@@ -147,29 +154,42 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
 
     isPointerDownInBubbleRef.current = true;
     isTextDraggingRef.current = false;
+    didDragTextRef.current = false;
+    lastValidDragRangeRef.current = null;
     textEditableRef.current?.removeAttribute('data-ps-color-active');
+    setFloatingToolbarPos(null);
 
-    // If user already has an active text selection inside the document, do not trigger long-press drag
-    const activeSel = window.getSelection();
-    if (activeSel && !activeSel.isCollapsed && activeSel.toString().length > 0) {
-      clearLongPressTimer();
-      return;
+    // Clear any existing selection before native mousedown so the browser never enters
+    // native HTML5 drag-and-drop mode on previously selected text or <br> line breaks.
+    if (!e.shiftKey) {
+      const existingSel = window.getSelection();
+      if (existingSel && !existingSel.isCollapsed) {
+        existingSel.removeAllRanges();
+      }
     }
 
     const startX = e.clientX;
     const startY = e.clientY;
     const initialAlt = e.altKey;
-    pointerStartRef.current = { x: startX, y: startY };
 
     clearLongPressTimer();
     pointerStartRef.current = { x: startX, y: startY };
 
+    const isInsideText =
+      textEditableRef.current &&
+      (target === textEditableRef.current ||
+        textEditableRef.current.contains(target) ||
+        bubbleBoxRef.current?.contains(target));
+
+    // Only allow long-press bubble drag if user holds still without selecting text
+    const delayMs = initialAlt ? 220 : isInsideText ? 600 : 380;
+
     longPressTimerRef.current = window.setTimeout(() => {
       longPressTimerRef.current = null;
-      // Never start long-press if user is dragging/selecting text
       const sel = window.getSelection();
       if (
         isTextDraggingRef.current ||
+        didDragTextRef.current ||
         (sel && !sel.isCollapsed && sel.toString().length > 0)
       ) {
         return;
@@ -181,11 +201,11 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
         onSelect();
         onStartLongPressDrag(bubble.id, startX, startY, initialAlt);
       }
-    }, 360);
+    }, delayMs);
   };
 
   const handleMouseMoveBeforeLongPress = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!pointerStartRef.current || longPressTimerRef.current === null) return;
+    if (!pointerStartRef.current) return;
     const dx = e.clientX - pointerStartRef.current.x;
     const dy = e.clientY - pointerStartRef.current.y;
     const sel = window.getSelection();
@@ -194,6 +214,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
       (sel && !sel.isCollapsed && sel.toString().length > 0)
     ) {
       isTextDraggingRef.current = true;
+      didDragTextRef.current = true;
       clearLongPressTimer();
     }
   };
@@ -267,11 +288,15 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     // 1. Reset to max-content so the browser lays out text up to the 95% max-width limit
     boxEl.style.width = 'max-content';
 
-    const elClientWidth = textEl.clientWidth;
+    const activePadX =
+      bubble.bubbleShape === 'cloud'
+        ? (bubble.cloudPaddingX ?? 24)
+        : bubble.paddingX;
+    const elClientWidth = textEl.clientWidth - activePadX * 2;
     if (elClientWidth <= 0) return;
 
     const elRect = textEl.getBoundingClientRect();
-    const scale = elRect.width / elClientWidth || 1;
+    const scale = textEl.offsetWidth > 0 ? elRect.width / textEl.offsetWidth : 1;
     const initialHeight = textEl.offsetHeight;
 
     // 2. Measure the tightest horizontal span across all rendered text fragments
@@ -302,11 +327,8 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
 
     if (plainContent.length === 0) {
       const borderExtra = bubble.hasBorder ? 2 : 0;
-      const activePadX =
-        bubble.bubbleShape === 'cloud'
-          ? (bubble.cloudPaddingX ?? 24)
-          : bubble.paddingX;
-      const placeholderWidth = Math.ceil(textEl.scrollWidth || bubble.fontSize * 4.8);
+      const rawScrollWidth = Math.max(0, (textEl.scrollWidth || 0) - activePadX * 2);
+      const placeholderWidth = Math.ceil(rawScrollWidth || bubble.fontSize * 4.8);
       const minEmptyInnerWidth = isExporting
         ? Math.max(metaWidth, 24)
         : Math.max(metaWidth, placeholderWidth);
@@ -316,10 +338,6 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
       const requiredInnerWidth = Math.max(tightTextWidth, metaWidth);
       if (requiredInnerWidth > 0 && requiredInnerWidth < elClientWidth - 1) {
         const borderExtra = bubble.hasBorder ? 2 : 0;
-        const activePadX =
-          bubble.bubbleShape === 'cloud'
-            ? (bubble.cloudPaddingX ?? 24)
-            : bubble.paddingX;
         let targetBoxWidth =
           Math.ceil(requiredInnerWidth + 1) + activePadX * 2 + borderExtra;
         boxEl.style.width = `${targetBoxWidth}px`;
@@ -344,7 +362,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
           : { width: measuredW, height: measuredH }
       );
     }
-  }, [bubble.bubbleShape, bubble.cloudPaddingX, bubble.hasBorder, bubble.paddingX, isExporting]);
+  }, [bubble.bubbleShape, bubble.cloudPaddingX, bubble.fontSize, bubble.hasBorder, bubble.paddingX, isExporting]);
 
   // Sync initial or updated html into contentEditable without interrupting typing, then fit width
   useLayoutEffect(() => {
@@ -412,19 +430,21 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     };
   }, [fitBubbleToWrappedText]);
 
-  const checkSelection = () => {
+  const checkSelection = useCallback(() => {
     recordSelection(bubble.id);
     const range = getSelectionWithinBubble(bubble.id);
     if (range && !range.collapsed && range.toString().trim().length > 0) {
       const rect = range.getBoundingClientRect();
-      setFloatingToolbarPos({
-        top: rect.top - 46,
-        left: rect.left + rect.width / 2 - 130,
-      });
+      if (rect.width > 0 || rect.height > 0) {
+        setFloatingToolbarPos({
+          top: rect.top - 46,
+          left: rect.left + rect.width / 2 - 130,
+        });
+      }
     } else {
       setFloatingToolbarPos(null);
     }
-  };
+  }, [bubble.id]);
 
   useEffect(() => {
     const handleDocSelectionChange = () => {
@@ -441,32 +461,127 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
       }
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed) {
-        textEditableRef.current?.removeAttribute('data-ps-color-active');
-        setFloatingToolbarPos(null);
+        if (!isPointerDownInBubbleRef.current) {
+          textEditableRef.current?.removeAttribute('data-ps-color-active');
+          setFloatingToolbarPos(null);
+        }
         return;
       }
-      // Active text selection detected -> disable long-press immediately
+
+      const textEl = textEditableRef.current;
+      const boxEl = bubbleBoxRef.current;
+      const range = sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+      const isInsideThisBubble =
+        textEl &&
+        range &&
+        (textEl.contains(range.commonAncestorContainer) ||
+          textEl === range.commonAncestorContainer ||
+          textEl.contains(sel.anchorNode) ||
+          textEl.contains(sel.focusNode) ||
+          (boxEl && boxEl.contains(range.commonAncestorContainer)));
+
+      if (!isInsideThisBubble || !range) {
+        return;
+      }
+
+      // Active text selection detected -> disable long-press immediately and record range
       isTextDraggingRef.current = true;
+      didDragTextRef.current = true;
       clearLongPressTimer();
-      checkSelection();
+
+      const clamped = getClampedRangeInBubble(bubble.id, range);
+      if (clamped && !clamped.collapsed && clamped.toString().trim().length > 0) {
+        lastValidDragRangeRef.current = clamped.cloneRange();
+        setSavedSelectionRange(bubble.id, clamped);
+      } else {
+        recordSelection(bubble.id);
+      }
+
+      // Only mount/reposition floating toolbar when mouse button is not held down (e.g. keyboard selection or after mouseup)
+      if (!isPointerDownInBubbleRef.current) {
+        checkSelection();
+      }
     };
 
-    const handleWindowMouseUp = () => {
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      if (!isPointerDownInBubbleRef.current || !pointerStartRef.current) return;
+      const dx = e.clientX - pointerStartRef.current.x;
+      const dy = e.clientY - pointerStartRef.current.y;
+      if (Math.hypot(dx, dy) > 2) {
+        isTextDraggingRef.current = true;
+        didDragTextRef.current = true;
+        clearLongPressTimer();
+      }
+    };
+
+    const handleWindowMouseUp = (e: MouseEvent) => {
+      const startPt = pointerStartRef.current;
       clearLongPressTimer();
       if (isPointerDownInBubbleRef.current) {
         isPointerDownInBubbleRef.current = false;
-        checkSelection();
+        const dragDist = startPt
+          ? Math.hypot(e.clientX - startPt.x, e.clientY - startPt.y)
+          : 0;
+        const savedDragRange = lastValidDragRangeRef.current;
+
+        onSelect();
+
+        // If user dragged across text and reached the edge/outside of the bubble where the browser collapsed selection, restore it
+        const sel = window.getSelection();
+        if (
+          didDragTextRef.current &&
+          dragDist >= 6 &&
+          savedDragRange &&
+          !savedDragRange.collapsed &&
+          savedDragRange.toString().trim().length > 0
+        ) {
+          const currentClamped =
+            sel && sel.rangeCount > 0 && !sel.isCollapsed
+              ? getClampedRangeInBubble(bubble.id, sel.getRangeAt(0))
+              : null;
+          const activeRange =
+            currentClamped &&
+            !currentClamped.collapsed &&
+            currentClamped.toString().trim().length > 0
+              ? currentClamped
+              : savedDragRange;
+
+          setSavedSelectionRange(bubble.id, activeRange);
+          try {
+            if (sel && (sel.isCollapsed || currentClamped !== null)) {
+              sel.removeAllRanges();
+              sel.addRange(activeRange);
+            }
+          } catch {
+            // ignore
+          }
+          const rect = activeRange.getBoundingClientRect();
+          if (rect.width > 0 || rect.height > 0) {
+            setFloatingToolbarPos({
+              top: rect.top - 46,
+              left: rect.left + rect.width / 2 - 130,
+            });
+          }
+        } else {
+          checkSelection();
+        }
+
+        window.setTimeout(() => {
+          didDragTextRef.current = false;
+        }, 120);
       }
       isTextDraggingRef.current = false;
     };
 
     document.addEventListener('selectionchange', handleDocSelectionChange);
+    window.addEventListener('mousemove', handleWindowMouseMove);
     window.addEventListener('mouseup', handleWindowMouseUp);
     return () => {
       document.removeEventListener('selectionchange', handleDocSelectionChange);
+      window.removeEventListener('mousemove', handleWindowMouseMove);
       window.removeEventListener('mouseup', handleWindowMouseUp);
     };
-  }, [bubble.id, clearLongPressTimer]);
+  }, [bubble.id, checkSelection, clearLongPressTimer, onSelect]);
 
   const handleInput = () => {
     fitBubbleToWrappedText();
@@ -517,7 +632,15 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
   };
 
   const handleBlur = () => {
-    handleInput();
+    if (!textEditableRef.current) return;
+    const rawHtml = textEditableRef.current.innerHTML;
+    const rawText = textEditableRef.current.innerText;
+    const targetHtml = bubble.html || formatInitialTextToHtml(bubble.text);
+    const currentClean = rawHtml === '<br>' ? '' : rawHtml;
+    const targetClean = targetHtml === '<br>' ? '' : targetHtml;
+    if (currentClean !== targetClean || rawText !== bubble.text) {
+      handleInput();
+    }
   };
 
   const toggleAlign = (e: React.MouseEvent) => {
@@ -570,6 +693,23 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     Math.round(bubble.fontSize * (bubble.lineHeight || 1.6))
   );
 
+  const isCloudShape = bubble.bubbleShape === 'cloud';
+  const effectiveHasTail =
+    bubble.hasTail !== undefined ? bubble.hasTail : bubble.align !== 'center';
+  const effectiveBorderRadius = isCloudShape
+    ? (bubble.cloudBorderRadius ?? 14)
+    : (bubble.borderRadius ?? 14);
+  const effectivePaddingY = isCloudShape
+    ? (bubble.cloudPaddingY ?? 8)
+    : bubble.paddingY;
+  const effectivePaddingX = isCloudShape
+    ? (bubble.cloudPaddingX ?? 24)
+    : bubble.paddingX;
+  const hasInsideMeta =
+    Boolean(bubble.showMeta ?? Boolean(bubble.speaker || bubble.dateText)) &&
+    (bubble.metaTheme || 'inside') === 'inside' &&
+    Boolean(bubble.speaker?.trim() || bubble.dateText?.trim());
+
   const textStyle: React.CSSProperties = {
     fontFamily: bubble.fontFamily,
     fontSize: `${bubble.fontSize}px`,
@@ -586,24 +726,22 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     wordBreak: 'keep-all',
     overflowWrap: 'break-word',
     width: '100%',
+    boxSizing: 'content-box',
+    marginLeft: `-${effectivePaddingX}px`,
+    marginRight: `-${effectivePaddingX}px`,
+    marginTop: `-${effectivePaddingY}px`,
+    marginBottom: hasInsideMeta ? 0 : `-${effectivePaddingY}px`,
+    paddingLeft: `${effectivePaddingX}px`,
+    paddingRight: `${effectivePaddingX}px`,
+    paddingTop: `${effectivePaddingY}px`,
+    paddingBottom: hasInsideMeta ? 0 : `${effectivePaddingY}px`,
     display: 'block',
     outline: 'none',
     cursor: 'text',
+    userSelect: 'text',
+    WebkitUserSelect: 'text',
     transform: bubble.textOffsetY ? `translateY(${bubble.textOffsetY}px)` : undefined,
   };
-
-  const isCloudShape = bubble.bubbleShape === 'cloud';
-  const effectiveHasTail =
-    bubble.hasTail !== undefined ? bubble.hasTail : bubble.align !== 'center';
-  const effectiveBorderRadius = isCloudShape
-    ? (bubble.cloudBorderRadius ?? 14)
-    : (bubble.borderRadius ?? 14);
-  const effectivePaddingY = isCloudShape
-    ? (bubble.cloudPaddingY ?? 8)
-    : bubble.paddingY;
-  const effectivePaddingX = isCloudShape
-    ? (bubble.cloudPaddingX ?? 24)
-    : bubble.paddingX;
 
   const bubbleContainerStyle: React.CSSProperties = {
     backgroundColor: isCloudShape ? 'transparent' : bubble.bgColor,
@@ -649,7 +787,9 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
       onTouchCancel={clearLongPressTimer}
       onClick={(e) => {
         e.stopPropagation();
-        onSelect();
+        if (!didDragTextRef.current) {
+          onSelect();
+        }
       }}
       className={`group relative select-none transition-all ${
         isBeingDragged
@@ -661,14 +801,15 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
           : 'z-10'
       }`}
     >
-      {/* Floating Action Menu on select */}
+      {/* Floating Action Menu on select (PC only >= md) */}
       {isSelected && !isExporting && (
         <div
           id={`bubble-actions-${bubble.id}`}
           style={{
+            width: 'max-content',
             transform: `translate(${actionBarOffset.x}px, ${actionBarOffset.y}px)`,
           }}
-          className={`absolute -top-10 left-0 z-50 flex items-center gap-1 whitespace-nowrap rounded-lg border bg-white/95 px-1.5 py-1 shadow-md backdrop-blur-xs text-xs text-stone-600 print:hidden ${
+          className={`hidden md:flex w-max flex-nowrap absolute -top-10 left-0 z-50 items-center gap-1 whitespace-nowrap rounded-lg border bg-white/95 px-1.5 py-1 shadow-md backdrop-blur-xs text-xs text-stone-600 print:hidden ${
             isDraggingActionBar
               ? 'border-amber-500 ring-2 ring-amber-400/40 shadow-lg'
               : 'border-stone-200'
@@ -800,6 +941,13 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
           style={bubbleContainerStyle}
           onClick={(e) => {
             if (isExporting) return;
+            const sel = window.getSelection();
+            if (
+              didDragTextRef.current ||
+              (sel && !sel.isCollapsed && sel.toString().length > 0)
+            ) {
+              return;
+            }
             const target = e.target as HTMLElement;
             const textEl = textEditableRef.current;
             if (
@@ -809,7 +957,6 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
               !insideMetaRef.current?.contains(target)
             ) {
               textEl.focus();
-              const sel = window.getSelection();
               if (sel) {
                 const range = document.createRange();
                 range.selectNodeContents(textEl);
@@ -846,13 +993,27 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
             id={`bubble-text-${bubble.id}`}
             contentEditable={!isExporting}
             suppressContentEditableWarning={true}
+            draggable={false}
             data-empty={!isExporting && isBubbleTextEmpty ? 'true' : undefined}
             data-placeholder="내용 입력..."
+            onDragStart={(e) => e.preventDefault()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => e.preventDefault()}
+            onBeforeInput={(e) => {
+              const nativeEvent = e.nativeEvent as InputEvent;
+              if (
+                nativeEvent.inputType === 'insertFromDrop' ||
+                nativeEvent.inputType === 'deleteByDrag'
+              ) {
+                e.preventDefault();
+              }
+            }}
             onInput={handleInput}
             onPaste={handlePaste}
             onBlur={handleBlur}
             onMouseUp={checkSelection}
             onKeyUp={checkSelection}
+            className="select-text"
             style={{ ...textStyle, position: 'relative', zIndex: 1 }}
           />
 

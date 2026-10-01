@@ -4,6 +4,62 @@ import { BubbleSideStyle } from '../types';
 let savedRange: Range | null = null;
 let savedBubbleId: string | null = null;
 
+export function setSavedSelectionRange(bubbleId: string, range: Range) {
+  savedRange = range.cloneRange();
+  savedBubbleId = bubbleId;
+}
+
+export function getClampedRangeInBubble(
+  bubbleId: string,
+  rawRange: Range
+): Range | null {
+  if (typeof document === 'undefined') return null;
+  const container = document.getElementById(`bubble-text-${bubbleId}`);
+  if (!container) return null;
+  return getClampedRangeInContainer(container, rawRange);
+}
+
+function getClampedRangeInContainer(
+  container: HTMLElement,
+  rawRange: Range
+): Range | null {
+  try {
+    if (
+      container.contains(rawRange.commonAncestorContainer) ||
+      container === rawRange.commonAncestorContainer
+    ) {
+      return rawRange.cloneRange();
+    }
+
+    const startInside =
+      container.contains(rawRange.startContainer) ||
+      container === rawRange.startContainer;
+    const endInside =
+      container.contains(rawRange.endContainer) ||
+      container === rawRange.endContainer;
+
+    if (!startInside && !endInside && !rawRange.intersectsNode(container)) {
+      return null;
+    }
+
+    const bounds = document.createRange();
+    bounds.selectNodeContents(container);
+
+    const clamped = rawRange.cloneRange();
+    if (!startInside) {
+      clamped.setStart(bounds.startContainer, bounds.startOffset);
+    }
+    if (!endInside) {
+      clamped.setEnd(bounds.endContainer, bounds.endOffset);
+    }
+
+    if (clamped.collapsed) return null;
+    return clamped;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Save current text selection if it is inside the given bubble
  */
@@ -30,13 +86,12 @@ export function recordSelection(bubbleId: string) {
     }
     const range = sel.getRangeAt(0);
     const container = document.getElementById(`bubble-text-${bubbleId}`);
-    if (
-      container &&
-      (container.contains(range.commonAncestorContainer) ||
-        container === range.commonAncestorContainer)
-    ) {
-      savedRange = range.cloneRange();
-      savedBubbleId = bubbleId;
+    if (container) {
+      const clamped = getClampedRangeInContainer(container, range);
+      if (clamped && !clamped.collapsed) {
+        savedRange = clamped;
+        savedBubbleId = bubbleId;
+      }
     }
   } catch {
     // Ignore cross-origin or invalid range selection errors
@@ -71,6 +126,57 @@ export function stripInlineFontFamilyFromHtml(html?: string): string | undefined
 const INLINE_FORMAT_SELECTOR =
   'b,strong,i,em,u,ins,s,strike,del,font,span,mark,sub,sup';
 
+function restoreSpoilerElement(spoilerEl: HTMLElement): Node[] {
+  const parent = spoilerEl.parentNode;
+  if (!parent) return [];
+
+  const originalHtml = spoilerEl.getAttribute('data-original-html');
+  const currentText = spoilerEl.textContent || '';
+
+  // Legacy fallback if the spoiler span had its characters replaced with '■'
+  if (currentText.includes('■') && originalHtml !== null) {
+    const temp = document.createElement('div');
+    temp.innerHTML = originalHtml;
+    const restoredNodes: Node[] = [];
+    while (temp.firstChild) {
+      const child = temp.firstChild;
+      parent.insertBefore(child, spoilerEl);
+      restoredNodes.push(child);
+    }
+    parent.removeChild(spoilerEl);
+    return restoredNodes;
+  }
+
+  // Remove spoiler attributes and spoiler-specific inline styles
+  spoilerEl.removeAttribute('data-spoiler');
+  spoilerEl.removeAttribute('data-original-html');
+  spoilerEl.removeAttribute('data-original-text');
+  spoilerEl.style.removeProperty('color');
+  spoilerEl.style.removeProperty('-webkit-text-fill-color');
+  spoilerEl.style.removeProperty('text-decoration-color');
+  spoilerEl.style.removeProperty('background-color');
+  spoilerEl.style.removeProperty('background-image');
+  spoilerEl.style.removeProperty('background-repeat');
+  spoilerEl.style.removeProperty('background-position');
+  spoilerEl.style.removeProperty('background-size');
+  spoilerEl.style.removeProperty('box-decoration-break');
+  spoilerEl.style.removeProperty('-webkit-box-decoration-break');
+
+  const remainingStyle = (spoilerEl.getAttribute('style') || '').trim();
+  if (remainingStyle.length > 0) {
+    return [spoilerEl];
+  }
+
+  const restoredNodes: Node[] = [];
+  while (spoilerEl.firstChild) {
+    const child = spoilerEl.firstChild;
+    parent.insertBefore(child, spoilerEl);
+    restoredNodes.push(child);
+  }
+  parent.removeChild(spoilerEl);
+  return restoredNodes;
+}
+
 /**
  * Strips ALL inline text formatting (font-family, font-size, color, bold, italic,
  * underline, strikethrough, spans, font tags, inline style attributes) from a bubble's
@@ -82,6 +188,13 @@ export function stripAllInlineFormattingFromHtml(html?: string): string | undefi
   if (typeof document === 'undefined') return html;
   const temp = document.createElement('div');
   temp.innerHTML = html;
+
+  // 0. Restore any spoiler spans back to their original text before stripping formatting
+  let spoilerEl = temp.querySelector('[data-spoiler="true"]') as HTMLElement | null;
+  while (spoilerEl) {
+    restoreSpoilerElement(spoilerEl);
+    spoilerEl = temp.querySelector('[data-spoiler="true"]') as HTMLElement | null;
+  }
 
   // 1. Remove inline style / font attributes from all elements
   const allEls = temp.querySelectorAll('*');
@@ -142,6 +255,10 @@ export function hasInlineTextFormatting(
   if (!html || typeof document === 'undefined') return false;
   const temp = document.createElement('div');
   temp.innerHTML = html;
+
+  if (temp.querySelector('[data-spoiler="true"]')) {
+    return true;
+  }
 
   const baseBold = Boolean(defaultStyle?.isBold);
   const baseItalic = Boolean(defaultStyle?.isItalic);
@@ -363,14 +480,13 @@ export function getSelectionWithinBubble(bubbleId: string): Range | null {
     if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
       const range = sel.getRangeAt(0);
       const container = document.getElementById(`bubble-text-${bubbleId}`);
-      if (
-        container &&
-        (container.contains(range.commonAncestorContainer) ||
-          container === range.commonAncestorContainer)
-      ) {
-        savedRange = range.cloneRange();
-        savedBubbleId = bubbleId;
-        return range;
+      if (container) {
+        const clamped = getClampedRangeInContainer(container, range);
+        if (clamped && !clamped.collapsed) {
+          savedRange = clamped.cloneRange();
+          savedBubbleId = bubbleId;
+          return clamped;
+        }
       }
     }
   } catch {
@@ -466,6 +582,8 @@ export function formatSelection(
 
   if (options.command === 'removeFormat') {
     try {
+      const spoilersInSelection = getSpoilerElementsInRange(container, range);
+      spoilersInSelection.forEach((sp) => restoreSpoilerElement(sp));
       document.execCommand('removeFormat', false);
       // Also clean any leftover inline styles inside the range
       const fragment = range.extractContents();
@@ -633,4 +751,231 @@ export function formatSelection(
   }
 
   return executed;
+}
+
+function getSpoilerElementsInRange(
+  container: HTMLElement,
+  range: Range
+): HTMLElement[] {
+  const found: HTMLElement[] = [];
+  const addUnique = (el: HTMLElement | null) => {
+    if (el && container.contains(el) && !found.includes(el)) {
+      found.push(el);
+    }
+  };
+
+  const checkAncestors = (node: Node | null) => {
+    let curr: HTMLElement | null =
+      node instanceof HTMLElement ? node : node?.parentElement || null;
+    while (curr && curr !== container && container.contains(curr)) {
+      if (curr.getAttribute('data-spoiler') === 'true') {
+        addUnique(curr);
+      }
+      curr = curr.parentElement;
+    }
+  };
+
+  checkAncestors(range.commonAncestorContainer);
+  checkAncestors(range.startContainer);
+  checkAncestors(range.endContainer);
+
+  const allSpoilers = container.querySelectorAll('[data-spoiler="true"]');
+  allSpoilers.forEach((node) => {
+    if (node instanceof HTMLElement) {
+      try {
+        if (range.intersectsNode(node)) {
+          addUnique(node);
+        }
+      } catch {
+        // Ignore range intersection errors
+      }
+    }
+  });
+
+  return found;
+}
+
+/**
+ * Checks whether the current selection inside a bubble is already spoiler-masked.
+ */
+export function isSelectionSpoiler(bubbleId: string): boolean {
+  if (typeof document === 'undefined') return false;
+  const container = document.getElementById(`bubble-text-${bubbleId}`);
+  if (!container) return false;
+  const range = getSelectionWithinBubble(bubbleId);
+  if (!range || range.collapsed) return false;
+  return getSpoilerElementsInRange(container, range).length > 0;
+}
+
+/**
+ * Checks whether the bubble HTML contains any spoiler-masked spans.
+ */
+export function hasSpoilerInHtml(html?: string): boolean {
+  if (!html) return false;
+  return html.includes('data-spoiler="true"');
+}
+
+/**
+ * Maps character offsets [startOffset, endOffset] (e.g., from a textarea) to a DOM Range inside the bubble.
+ */
+export function selectBubbleRangeByTextOffsets(
+  bubbleId: string,
+  startOffset: number,
+  endOffset: number
+): boolean {
+  if (typeof document === 'undefined' || startOffset >= endOffset) return false;
+  const container = document.getElementById(`bubble-text-${bubbleId}`);
+  if (!container) return false;
+
+  const range = document.createRange();
+  let charCount = 0;
+  let startFound = false;
+  let endFound = false;
+
+  const traverse = (node: Node) => {
+    if (endFound) return;
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = (node.nodeValue || '').length;
+      if (!startFound && startOffset <= charCount + len) {
+        range.setStart(node, Math.max(0, startOffset - charCount));
+        startFound = true;
+      }
+      if (startFound && endOffset <= charCount + len) {
+        range.setEnd(node, Math.max(0, endOffset - charCount));
+        endFound = true;
+        return;
+      }
+      charCount += len;
+    } else if (node.nodeName === 'BR') {
+      charCount += 1;
+    } else {
+      for (let i = 0; i < node.childNodes.length; i++) {
+        traverse(node.childNodes[i]);
+        if (endFound) return;
+      }
+    }
+  };
+
+  traverse(container);
+  if (startFound && endFound) {
+    savedRange = range.cloneRange();
+    savedBubbleId = bubbleId;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Toggles spoiler masking ('■') on the selected text in a bubble.
+ * - If the selection is already spoiler-masked, restores its original characters.
+ * - If normal text is selected, replaces each character with '■' and stores the original HTML/text.
+ * - If no text is selected and the bubble contains spoiler spans, restores all spoiler spans in the bubble.
+ * - If no text is selected and the bubble has no spoiler spans, masks the entire bubble text.
+ */
+export function toggleSpoilerInBubble(
+  bubbleId: string,
+  onContentChange?: (newHtml: string, newText: string) => void
+): boolean {
+  if (typeof document === 'undefined' || typeof window === 'undefined') {
+    return false;
+  }
+  const container = document.getElementById(`bubble-text-${bubbleId}`);
+  if (!container) return false;
+
+  const sel = window.getSelection();
+  let range = getSelectionWithinBubble(bubbleId);
+
+  // If there is no non-collapsed selection range:
+  if (!range || range.collapsed || range.toString().length === 0) {
+    // 1. If the bubble already has any spoiler spans, restore all of them
+    const existingAll = Array.from(
+      container.querySelectorAll('[data-spoiler="true"]')
+    ).filter((el): el is HTMLElement => el instanceof HTMLElement);
+
+    if (existingAll.length > 0) {
+      existingAll.forEach((sp) => restoreSpoilerElement(sp));
+      clearSavedSelection();
+      if (onContentChange) {
+        onContentChange(container.innerHTML, container.innerText);
+      }
+      return true;
+    }
+
+    // 2. Otherwise, if the bubble has text, target the entire bubble contents
+    if ((container.innerText || '').trim().length === 0) {
+      return false;
+    }
+    const fullRange = document.createRange();
+    fullRange.selectNodeContents(container);
+    range = fullRange;
+  }
+
+  const existingSpoilers = getSpoilerElementsInRange(container, range);
+
+  if (existingSpoilers.length > 0) {
+    // Restore spoiler elements in the selection back to their original characters
+    const restoredNodes: Node[] = [];
+    existingSpoilers.forEach((sp) => {
+      restoredNodes.push(...restoreSpoilerElement(sp));
+    });
+
+    if (restoredNodes.length > 0) {
+      const firstNode = restoredNodes[0];
+      const lastNode = restoredNodes[restoredNodes.length - 1];
+      if (container.contains(firstNode) && container.contains(lastNode)) {
+        const newRange = document.createRange();
+        newRange.setStartBefore(firstNode);
+        newRange.setEndAfter(lastNode);
+        savedRange = newRange.cloneRange();
+        savedBubbleId = bubbleId;
+        if (sel) {
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+        }
+      }
+    }
+  } else {
+    // Cover selected characters with a black rectangular box matching the specified font's exact width and height
+    const fragment = range.extractContents();
+    const holder = document.createElement('div');
+    holder.appendChild(fragment.cloneNode(true));
+    const originalHtml = holder.innerHTML;
+    const originalText = holder.textContent || '';
+
+    if (originalText.length === 0) {
+      range.insertNode(fragment);
+      return false;
+    }
+
+    const spoilerSpan = document.createElement('span');
+    spoilerSpan.setAttribute('data-spoiler', 'true');
+    spoilerSpan.setAttribute('data-original-html', originalHtml);
+    spoilerSpan.setAttribute('data-original-text', originalText);
+    spoilerSpan.style.color = 'transparent';
+    spoilerSpan.style.webkitTextFillColor = 'transparent';
+    spoilerSpan.style.textDecorationColor = 'transparent';
+    spoilerSpan.style.backgroundImage = 'linear-gradient(#000000, #000000)';
+    spoilerSpan.style.backgroundRepeat = 'no-repeat';
+    spoilerSpan.style.backgroundPosition = 'center center';
+    spoilerSpan.style.backgroundSize = '100% 1em';
+    spoilerSpan.style.boxDecorationBreak = 'clone';
+    (spoilerSpan.style as unknown as Record<string, string>).webkitBoxDecorationBreak =
+      'clone';
+    spoilerSpan.appendChild(fragment);
+    range.insertNode(spoilerSpan);
+
+    const newRange = document.createRange();
+    newRange.selectNodeContents(spoilerSpan);
+    savedRange = newRange.cloneRange();
+    savedBubbleId = bubbleId;
+    if (sel) {
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+    }
+  }
+
+  if (onContentChange) {
+    onContentChange(container.innerHTML, container.innerText);
+  }
+  return true;
 }

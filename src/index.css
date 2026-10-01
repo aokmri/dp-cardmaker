@@ -42,6 +42,13 @@
 }
 
 /* Preserve the actual text color inside speech bubble selections instead of forcing black */
+[contenteditable],
+[contenteditable] * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-user-drag: none;
+}
+
 [contenteditable]::selection,
 [contenteditable] *::selection {
   background-color: rgba(245, 158, 11, 0.22);
@@ -69,6 +76,28 @@
 }
 [contenteditable][data-empty="true"] br {
   display: none;
+}
+
+/* Spoiler masking: black rectangular box matching the exact width and 1em height of the specified font */
+[data-spoiler="true"],
+[data-spoiler="true"] * {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  text-decoration-color: transparent !important;
+  text-shadow: none !important;
+  background-image: linear-gradient(#000000, #000000) !important;
+  background-repeat: no-repeat !important;
+  background-position: center center !important;
+  background-size: 100% 1em !important;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+[data-spoiler="true"]::selection,
+[data-spoiler="true"] *::selection {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  background-color: rgba(245, 158, 11, 0.32);
 }
 
 
