@@ -38,6 +38,7 @@ interface BatchSideStylePanelProps {
   onOpenFontManager: () => void;
   activeSide?: 'left' | 'center' | 'right';
   onActiveSideChange?: (side: 'left' | 'center' | 'right') => void;
+  resetKey?: string | number;
 }
 
 export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
@@ -50,14 +51,16 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
   onOpenFontManager,
   activeSide: controlledActiveSide,
   onActiveSideChange,
+  resetKey,
 }) => {
   const [internalActiveSide, setInternalActiveSide] = useState<'left' | 'center' | 'right'>('left');
   const activeSide = controlledActiveSide !== undefined ? controlledActiveSide : internalActiveSide;
+  const [notification, setNotification] = useState<string | null>(null);
   const setActiveSide = (side: 'left' | 'center' | 'right') => {
     setInternalActiveSide(side);
+    setNotification(null);
     onActiveSideChange?.(side);
   };
-  const [notification, setNotification] = useState<string | null>(null);
 
   // Category & Sub-section open/close states
   const [isTextCategoryOpen, setIsTextCategoryOpen] = useState(true);
@@ -206,6 +209,7 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
                 }}
                 onOpenFontManager={onOpenFontManager}
                 targetLabel={`${sideLabel(activeSide)} 일괄 서식`}
+                resetKey={resetKey ?? activeSide}
               />
             </div>
 

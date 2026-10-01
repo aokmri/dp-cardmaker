@@ -807,6 +807,18 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                     currentFamily={activeStyle.fontFamily}
                     onApplyFont={(family) => handleFontFamily(family)}
                     onOpenFontManager={onOpenFontManager}
+                    targetLabel={
+                      isEditingSingle
+                        ? '선택한 말풍선'
+                        : `${
+                            activeBatchSide === 'left'
+                              ? '왼쪽'
+                              : activeBatchSide === 'center'
+                              ? '중앙'
+                              : '오른쪽'
+                          } 일괄 서식`
+                    }
+                    resetKey={`${openTool}-${editMode}-${activeBatchSide}-${selectedBubble?.id ?? 'none'}`}
                   />
                 </div>
 

@@ -543,8 +543,10 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             fonts={fonts}
             onOpenFontManager={onOpenFontManager}
             activeSide={activeBatchSide}
+            resetKey={`${activeTab}-${activeBatchSide}`}
             onActiveSideChange={(side) => {
               setActiveBatchSide(side);
+              setSaveSuccessMsg(null);
               onActiveBatchSideChange?.(side);
             }}
           />
@@ -662,6 +664,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                         }}
                         onOpenFontManager={onOpenFontManager}
                         targetLabel="선택한 말풍선"
+                        resetKey={`${activeTab}-${selectedBubble.id}-${selectedBubble.align}`}
                       />
                     </div>
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ShieldAlert, ClipboardPaste, X, CheckCircle2, RefreshCw } from 'lucide-react';
 
 interface ClipboardGuideModalProps {
@@ -67,13 +68,19 @@ export const ClipboardGuideModal: React.FC<ClipboardGuideModalProps> = ({
     }
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-stone-900/50 p-4 backdrop-blur-xs"
-      onClick={onClose}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-stone-900/55 p-4 backdrop-blur-xs"
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-5 shadow-2xl space-y-4"
+        className="w-full max-w-md max-h-[88dvh] overflow-y-auto rounded-2xl border border-stone-200 bg-white p-5 shadow-2xl space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -106,8 +113,8 @@ export const ClipboardGuideModal: React.FC<ClipboardGuideModalProps> = ({
         {/* Direct Paste Box inside the Alert Modal */}
         <div className="space-y-1.5">
           <label className="flex items-center gap-1.5 text-xs font-semibold text-stone-800">
-            <ClipboardPaste className="h-3.5 w-3.5 text-amber-700" />
-            방법 1. 아래 칸에 직접 붙여넣기 (권한 설정 없이 즉시 작동)
+            <ClipboardPaste className="h-3.5 w-3.5 text-amber-700 shrink-0" />
+            <span>방법 1. 아래 칸에 직접 붙여넣기 (권한 설정 없이 즉시 작동)</span>
           </label>
           <div
             ref={pasteBoxRef}
@@ -134,7 +141,7 @@ export const ClipboardGuideModal: React.FC<ClipboardGuideModalProps> = ({
               type="button"
               onClick={handleRetryClick}
               disabled={isRetrying}
-              className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-950 hover:bg-amber-200 transition cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1 shrink-0 rounded-lg border border-amber-300 bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-950 hover:bg-amber-200 transition cursor-pointer disabled:opacity-50"
             >
               <RefreshCw className={`h-3 w-3 ${isRetrying ? 'animate-spin' : ''}`} />
               <span>권한 다시 요청</span>
@@ -161,6 +168,7 @@ export const ClipboardGuideModal: React.FC<ClipboardGuideModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

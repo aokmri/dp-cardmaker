@@ -14,6 +14,7 @@ interface FontPasteMatcherProps {
   onApplyFont: (family: string, fontName: string) => void;
   onOpenFontManager?: () => void;
   targetLabel?: string; // e.g. '왼쪽 일괄 서식' or '선택한 말풍선'
+  resetKey?: string | number;
 }
 
 function extractPlainTextFromHtml(html: string): string {
@@ -32,6 +33,7 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
   onApplyFont,
   onOpenFontManager,
   targetLabel = '현재 서식',
+  resetKey,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -45,6 +47,16 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
 
   const richPasteRef = useRef<HTMLDivElement>(null);
   const lastPasteTimeRef = useRef<number>(0);
+
+  // Reset the font finder box and messages whenever the user switches side/tab/target
+  useEffect(() => {
+    setIsOpen(false);
+    setInputValue('');
+    setResults([]);
+    setStatusMsg(null);
+    setAppliedFontName(null);
+    setShowGuideModal(false);
+  }, [targetLabel, resetKey]);
 
   const processClipboardContent = useCallback(
     (htmlData: string, plainText: string) => {
@@ -208,6 +220,7 @@ export const FontPasteMatcher: React.FC<FontPasteMatcherProps> = ({
             setIsOpen(false);
             setResults([]);
             setStatusMsg(null);
+            setAppliedFontName(null);
             setInputValue('');
           }}
           className="rounded p-0.5 text-stone-400 hover:bg-stone-200/60 hover:text-stone-700"

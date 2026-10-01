@@ -110,6 +110,15 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
     [fonts]
   );
 
+  // Reset detector state when closing modal or switching tabs
+  useEffect(() => {
+    setDetectInput('');
+    setDetectedCandidates([]);
+    setDetectStatus('');
+    setAppliedNotice(null);
+    setShowGuideModal(false);
+  }, [isOpen, activeTab]);
+
   // Global paste listener while the modal's 'detect' tab is open: pressing Ctrl+V / Cmd+V anywhere works with 0 security restrictions
   useEffect(() => {
     if (!isOpen || activeTab !== 'detect') return;
