@@ -595,7 +595,7 @@ export default function App() {
   const handleImportBubbles = (newBubbles: Bubble[], mode: 'replace' | 'append') => {
     recordHistory(false);
 
-    // Populate defaultSideStyles with extracted nickname (이름), date/time (시간), and fontFamily per side
+    // Populate defaultSideStyles and savedSideStyles with extracted nickname (이름), date/time (시간), and fontFamily per side
     setDefaultSideStyles((prev) => {
       const next = {
         left: { ...prev.left },
@@ -617,6 +617,7 @@ export default function App() {
           next[side].fontFamily = firstWithFont.fontFamily;
         }
       }
+      setSavedSideStyles(next);
       return next;
     });
 
@@ -758,11 +759,23 @@ export default function App() {
       'metaColor',
     ];
 
-    setDefaultSideStyles((prev) => ({
-      left: { ...prev.left, ...leftPatch },
-      center: { ...prev.center, ...centerPatch },
-      right: { ...prev.right, ...rightPatch },
-    }));
+    setDefaultSideStyles((prev) => {
+      const nextStyles: DefaultSideStyles = {
+        left: { ...prev.left, ...leftPatch },
+        center: { ...prev.center, ...centerPatch },
+        right: { ...prev.right, ...rightPatch },
+      };
+      setSavedSideStyles(nextStyles);
+      try {
+        localStorage.setItem(
+          'manhwa_default_side_styles_v5',
+          JSON.stringify(nextStyles)
+        );
+      } catch {
+        // ignore
+      }
+      return nextStyles;
+    });
 
     setBubbles((prevBubbles) =>
       prevBubbles.map((b) => {
