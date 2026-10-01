@@ -1129,32 +1129,6 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                   {isBubbleSizeOpen && (
                     <div className="grid grid-cols-2 gap-2 pt-2.5">
                       {renderCollapsibleSlider({
-                        sliderKey: 'bubble-borderRadius',
-                        label:
-                          activeStyle.bubbleShape === 'cloud'
-                            ? '모서리 둥글기 (구름)'
-                            : '모서리 둥글기 (일반)',
-                        displayValue: `${
-                          activeStyle.bubbleShape === 'cloud'
-                            ? (activeStyle.cloudBorderRadius ?? 14)
-                            : activeStyle.borderRadius
-                        }px`,
-                        value:
-                          activeStyle.bubbleShape === 'cloud'
-                            ? (activeStyle.cloudBorderRadius ?? 14)
-                            : activeStyle.borderRadius,
-                        min: 0,
-                        max: 36,
-                        step: 1,
-                        onChange: (val) =>
-                          handleStyleChange(
-                            activeStyle.bubbleShape === 'cloud'
-                              ? { cloudBorderRadius: val }
-                              : { borderRadius: val }
-                          ),
-                      })}
-
-                      {renderCollapsibleSlider({
                         sliderKey: 'bubble-paddingY',
                         label:
                           activeStyle.bubbleShape === 'cloud'
@@ -1180,30 +1154,56 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                           ),
                       })}
 
+                      {renderCollapsibleSlider({
+                        sliderKey: 'bubble-paddingX',
+                        label:
+                          activeStyle.bubbleShape === 'cloud'
+                            ? '좌우 여백 (구름)'
+                            : '좌우 여백 (일반)',
+                        displayValue: `${
+                          activeStyle.bubbleShape === 'cloud'
+                            ? (activeStyle.cloudPaddingX ?? 24)
+                            : activeStyle.paddingX
+                        }px`,
+                        value:
+                          activeStyle.bubbleShape === 'cloud'
+                            ? (activeStyle.cloudPaddingX ?? 24)
+                            : activeStyle.paddingX,
+                        min: 10,
+                        max: 48,
+                        step: 1,
+                        onChange: (val) =>
+                          handleStyleChange(
+                            activeStyle.bubbleShape === 'cloud'
+                              ? { cloudPaddingX: val }
+                              : { paddingX: val }
+                          ),
+                      })}
+
                       <div className="col-span-2">
                         {renderCollapsibleSlider({
-                          sliderKey: 'bubble-paddingX',
+                          sliderKey: 'bubble-borderRadius',
                           label:
                             activeStyle.bubbleShape === 'cloud'
-                              ? '좌우 여백 (구름)'
-                              : '좌우 여백 (일반)',
+                              ? '모서리 둥글기 (구름)'
+                              : '모서리 둥글기 (일반)',
                           displayValue: `${
                             activeStyle.bubbleShape === 'cloud'
-                              ? (activeStyle.cloudPaddingX ?? 24)
-                              : activeStyle.paddingX
+                              ? (activeStyle.cloudBorderRadius ?? 14)
+                              : activeStyle.borderRadius
                           }px`,
                           value:
                             activeStyle.bubbleShape === 'cloud'
-                              ? (activeStyle.cloudPaddingX ?? 24)
-                              : activeStyle.paddingX,
-                          min: 10,
-                          max: 48,
+                              ? (activeStyle.cloudBorderRadius ?? 14)
+                              : activeStyle.borderRadius,
+                          min: 0,
+                          max: 36,
                           step: 1,
                           onChange: (val) =>
                             handleStyleChange(
                               activeStyle.bubbleShape === 'cloud'
-                                ? { cloudPaddingX: val }
-                                : { paddingX: val }
+                                ? { cloudBorderRadius: val }
+                                : { borderRadius: val }
                             ),
                         })}
                       </div>
@@ -1926,13 +1926,17 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                               onClick={() =>
                                 onUpdateCanvasConfig({ dividerStyle: style })
                               }
-                              className={`rounded px-2 py-1 text-[11px] capitalize ${
+                              className={`rounded px-2 py-1 text-[11px] ${
                                 canvasConfig.dividerStyle === style
                                   ? 'bg-stone-900 text-white font-semibold'
                                   : 'bg-white border border-stone-200 text-stone-600'
                               }`}
                             >
-                              {style}
+                              {style === 'solid'
+                                ? '기본'
+                                : style === 'dashed'
+                                ? '점선'
+                                : '이중선'}
                             </button>
                           )
                         )}

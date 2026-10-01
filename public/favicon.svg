@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Envelope body (transparent outer background) -->
+  <rect x="4" y="12" width="56" height="40" rx="6" fill="#FAF6EE" stroke="#8C7355" stroke-width="3" />
+  <!-- Bottom fold lines -->
+  <path d="M6.5 49.5L26 31M57.5 49.5L38 31" stroke="#C9B393" stroke-width="2.5" stroke-linecap="round" />
+  <!-- Top envelope flap -->
+  <path d="M5.5 14.5L32 35L58.5 14.5" fill="#F3EADF" />
+  <path d="M5.5 14.5L32 35L58.5 14.5" stroke="#8C7355" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

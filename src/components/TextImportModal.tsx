@@ -3,8 +3,6 @@ import {
   X,
   FileText,
   ArrowRightLeft,
-  AlignLeft,
-  Layers,
   Check,
   ClipboardPaste,
   Sparkles,
@@ -679,7 +677,7 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
             <div className="relative mt-2">
               <textarea
                 rows={8}
-                placeholder={`이체통에서 나눈 쪽지를 붙여넣으세요.\n\n예:\n대화1\n닉네임A\n•\nn세 n월 n일`}
+                placeholder={`이체통에서 나눈 쪽지를 붙여넣으세요.\n\n예:\n대화\n닉네임\n•\nn세 n월 n일`}
                 value={inputText}
                 onPaste={handleTextareaPaste}
                 onChange={(e) => {
@@ -1084,25 +1082,23 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setAlignmentRule('alternate')}
-                  className={`flex flex-1 items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition cursor-pointer ${
+                  className={`flex flex-1 items-center justify-center whitespace-nowrap rounded-lg border py-2 px-1.5 text-xs font-medium transition cursor-pointer ${
                     alignmentRule === 'alternate'
                       ? 'border-stone-900 bg-stone-900 text-white'
                       : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
                   }`}
                 >
-                  <ArrowRightLeft className="h-3.5 w-3.5" />
                   좌우 교차
                 </button>
                 <button
                   type="button"
                   onClick={() => setAlignmentRule('left')}
-                  className={`flex flex-1 items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition cursor-pointer ${
+                  className={`flex flex-1 items-center justify-center whitespace-nowrap rounded-lg border py-2 px-1.5 text-xs font-medium transition cursor-pointer ${
                     alignmentRule === 'left'
                       ? 'border-stone-900 bg-stone-900 text-white'
                       : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
                   }`}
                 >
-                  <AlignLeft className="h-3.5 w-3.5" />
                   왼쪽 정렬
                 </button>
               </div>
@@ -1114,7 +1110,7 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setImportMode('replace')}
-                  className={`flex flex-1 items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition cursor-pointer ${
+                  className={`flex flex-1 items-center justify-center whitespace-nowrap rounded-lg border py-2 px-1.5 text-xs font-medium transition cursor-pointer ${
                     importMode === 'replace'
                       ? 'border-stone-900 bg-stone-900 text-white'
                       : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
@@ -1125,13 +1121,12 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setImportMode('append')}
-                  className={`flex flex-1 items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition cursor-pointer ${
+                  className={`flex flex-1 items-center justify-center whitespace-nowrap rounded-lg border py-2 px-1.5 text-xs font-medium transition cursor-pointer ${
                     importMode === 'append'
                       ? 'border-stone-900 bg-stone-900 text-white'
                       : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
                   }`}
                 >
-                  <Layers className="h-3.5 w-3.5" />
                   뒤에 추가
                 </button>
               </div>

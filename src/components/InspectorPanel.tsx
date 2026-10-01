@@ -1856,13 +1856,17 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                                 key={style}
                                 type="button"
                                 onClick={() => onUpdateCanvasConfig({ dividerStyle: style })}
-                                className={`rounded px-2 py-0.5 text-[11px] capitalize cursor-pointer ${
+                                className={`rounded px-2 py-0.5 text-[11px] cursor-pointer ${
                                   canvasConfig.dividerStyle === style
                                     ? 'bg-stone-800 text-white'
                                     : 'bg-white border text-stone-600'
                                 }`}
                               >
-                                {style}
+                                {style === 'solid'
+                                  ? '기본'
+                                  : style === 'dashed'
+                                  ? '점선'
+                                  : '이중선'}
                               </button>
                             ))}
                           </div>
