@@ -252,6 +252,14 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
       config.paperTexture
     );
 
+    // Relative vertical height adjustment based on the height formed by the bubbles (0 ~ 500px, default 120px)
+    const relativeVerticalExtra =
+      config.minHeight > 500 ? 120 : Math.max(0, config.minHeight ?? 120);
+    const halfVerticalExtra = relativeVerticalExtra / 2;
+    const outerPadY =
+      32 + Math.min(16, Math.round(halfVerticalExtra * (16 / 30)));
+    const innerBubblesPadY = Math.max(0, halfVerticalExtra - (outerPadY - 32));
+
     return (
       <div
         id="card-capture-target"
@@ -278,12 +286,11 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
         }}
         style={{
           width: `${config.width}px`,
-          minHeight: `${config.minHeight}px`,
           backgroundColor: config.bgColor,
           paddingLeft: `${config.paddingX}px`,
           paddingRight: `${config.paddingX}px`,
-          paddingTop: `${config.paddingY}px`,
-          paddingBottom: `${config.paddingY}px`,
+          paddingTop: `${outerPadY}px`,
+          paddingBottom: `${outerPadY}px`,
           isolation: 'isolate',
         }}
         className="relative flex flex-col justify-between overflow-hidden shadow-xl transition-all select-none"
@@ -381,7 +388,7 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
             )}
 
             {config.showDividers && (
-              <div className="w-full pb-6">
+              <div className="w-full pb-2.5">
                 {config.dividerStyle === 'double' ? (
                   <div
                     style={{
@@ -410,6 +417,10 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
             id="canvas-bubbles-area"
             ref={bubblesAreaRef}
             className="relative flex w-full flex-col"
+            style={{
+              paddingTop: `${innerBubblesPadY}px`,
+              paddingBottom: `${innerBubblesPadY}px`,
+            }}
           >
             {bubbles.map((bubble, idx) => {
               const showDropIndicatorBefore =
@@ -531,7 +542,7 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
           {/* Bottom Decorative Section */}
           <div className="relative w-full">
             {config.showDividers && (
-              <div className="w-full pt-6">
+              <div className="w-full pt-2.5">
                 {config.dividerStyle === 'double' ? (
                   <div
                     style={{

@@ -186,12 +186,27 @@ export default function App() {
 
   // Select bubble handler - automatically switches to 'single' (개별편집) tab, or 'canvas' (배경지) when deselected
   const handleSelectBubble = (id: string | null) => {
+    handleRevertUnsavedSideStyles();
     setSelectedBubbleId(id);
     if (id) {
       setInspectorTab('single');
     } else {
       setInspectorTab('canvas');
     }
+  };
+
+  const handleInspectorTabChange = (tab: 'batch' | 'single' | 'canvas') => {
+    if (tab !== inspectorTab) {
+      handleRevertUnsavedSideStyles();
+    }
+    setInspectorTab(tab);
+  };
+
+  const handleActiveBatchSideChange = (side: 'left' | 'center' | 'right') => {
+    if (side !== activeBatchSide) {
+      handleRevertUnsavedSideStyles();
+    }
+    setActiveBatchSide(side);
   };
 
   // Add a new speech bubble using side default style
@@ -344,6 +359,31 @@ export default function App() {
     );
   };
 
+  // Revert any unsaved batch side styles when navigating to another option window/tab without saving
+  const handleRevertUnsavedSideStyles = () => {
+    setDefaultSideStyles((currentDefaults) => {
+      const modifiedSides = (['left', 'center', 'right'] as const).filter(
+        (side) =>
+          JSON.stringify(currentDefaults[side]) !==
+          JSON.stringify(savedSideStyles[side])
+      );
+      if (modifiedSides.length === 0) return currentDefaults;
+
+      setBubbles((currentBubbles) =>
+        currentBubbles.map((b) => {
+          if (!modifiedSides.includes(b.align)) return b;
+          return applySideStylePreservingCustom(b, savedSideStyles[b.align]);
+        })
+      );
+
+      return {
+        left: { ...savedSideStyles.left },
+        center: { ...savedSideStyles.center },
+        right: { ...savedSideStyles.right },
+      };
+    });
+  };
+
   // Copy style between sides and live-update
   const handleCopySideStyle = (
     fromSide: 'left' | 'right' | 'center',
@@ -355,6 +395,18 @@ export default function App() {
       ...prev,
       [toSide]: copied,
     }));
+    setSavedSideStyles((prev) => {
+      const nextSaved = {
+        ...prev,
+        [toSide]: { ...copied },
+      };
+      try {
+        localStorage.setItem('manhwa_default_side_styles_v5', JSON.stringify(nextSaved));
+      } catch {
+        // ignore
+      }
+      return nextSaved;
+    });
     setBubbles((currentBubbles) =>
       currentBubbles.map((b) => {
         if (b.align !== toSide) return b;
@@ -1099,9 +1151,17 @@ export default function App() {
     );
 
     if (nextCanvasConfig && typeof nextCanvasConfig === 'object') {
+      const normalizedMinHeight =
+        typeof nextCanvasConfig.minHeight === 'number' &&
+        nextCanvasConfig.minHeight > 500
+          ? 120
+          : nextCanvasConfig.minHeight;
       setCanvasConfig((prev) => ({
         ...prev,
         ...nextCanvasConfig,
+        ...(normalizedMinHeight !== undefined
+          ? { minHeight: normalizedMinHeight }
+          : {}),
       }));
     }
   };
@@ -1157,7 +1217,7 @@ export default function App() {
                   이체통 출력소
                 </span>
                 <span className="truncate text-stone-500">
-                  이세계 우체통 특화 카드 메이커
+                  이세계 우체통 최적화 대화 백업 에디터
                 </span>
               </div>
             </div>
@@ -1217,7 +1277,7 @@ export default function App() {
         {/* Right Inspector Panel (Desktop >= md) */}
         <InspectorPanel
           activeTab={inspectorTab}
-          onTabChange={setInspectorTab}
+          onTabChange={handleInspectorTabChange}
           selectedBubble={selectedBubble}
           bubbles={bubbles}
           onUpdateBubble={(updated) => {
@@ -1242,7 +1302,7 @@ export default function App() {
           onRevertSideStyle={handleRevertSideStyle}
           onCopySideStyle={handleCopySideStyle}
           onSelectBubbleById={handleSelectBubble}
-          onActiveBatchSideChange={setActiveBatchSide}
+          onActiveBatchSideChange={handleActiveBatchSideChange}
           onApplyTheme={handleApplyTheme}
         />
 
@@ -1273,9 +1333,10 @@ export default function App() {
           onUpdateSideStyle={handleUpdateSideStyle}
           onSaveSideStyle={handleSaveSideStyle}
           onRevertSideStyle={handleRevertSideStyle}
+          onRevertUnsavedSideStyles={handleRevertUnsavedSideStyles}
           onCopySideStyle={handleCopySideStyle}
           activeBatchSide={activeBatchSide}
-          onActiveBatchSideChange={setActiveBatchSide}
+          onActiveBatchSideChange={handleActiveBatchSideChange}
           onApplyTheme={handleApplyTheme}
         />
       </div>

@@ -67,11 +67,6 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
   const [isBubbleStyleOpen, setIsBubbleStyleOpen] = useState(false);
 
   const currentStyle = defaultSideStyles[activeSide] || defaultSideStyles.left;
-  const savedStyle = savedSideStyles[activeSide] || savedSideStyles.left;
-  // Determine if current working style differs from saved default
-  const isModified = JSON.stringify(currentStyle) !== JSON.stringify(savedStyle);
-
-  const sideBubbles = bubbles.filter((b) => b.align === activeSide);
 
   const sideLabel = (side: 'left' | 'center' | 'right') =>
     side === 'left' ? '왼쪽' : side === 'center' ? '중앙' : '오른쪽';
@@ -162,46 +157,6 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
           <span>{notification}</span>
         </div>
       )}
-
-      {/* Live Preview & Save/Revert Banner */}
-      <div className="rounded-xl border border-stone-200 bg-stone-50/80 p-3.5 space-y-2.5 shadow-2xs">
-        <div className="flex items-center justify-between gap-1 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-stone-900">
-              {sideLabel(activeSide)} 서식 일괄 설정
-            </span>
-            {isModified ? (
-              <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-600 animate-pulse" />
-                실시간 반영 중
-              </span>
-            ) : (
-              <span className="rounded-md bg-stone-200/70 px-1.5 py-0.5 text-[10px] text-stone-600">
-                기본서식과 일치
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1 text-[11px] text-stone-500">
-            <span className="text-[10px] text-stone-400">복사:</span>
-            {otherSides.map((target) => (
-              <button
-                key={target}
-                type="button"
-                onClick={() => handleCopy(target)}
-                className="rounded border border-stone-200 bg-white px-1.5 py-0.5 text-[10px] text-stone-600 hover:bg-stone-50 hover:text-stone-900 transition"
-                title={`${sideLabel(target)}에 이 서식 복사`}
-              >
-                → {sideLabel(target)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <p className="text-[11px] text-stone-600 leading-relaxed">
-          아래 서식을 조절하면 화면의 <strong>{sideLabel(activeSide)} 말풍선({sideBubbles.length}개)에 즉시 반영</strong>됩니다. 개별 편집으로 서식을 설정한 글자는 그대로 유지됩니다.
-        </p>
-      </div>
 
       {/* Category 1: 텍스트 (기본 폰트 / 글자 서식 & 정렬 / 기본 글자 크기 / 글자 색상 / 글자 간격) */}
       <div className="rounded-xl border border-stone-200 bg-white overflow-hidden shadow-2xs">
@@ -438,8 +393,8 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
               </div>
             </div>
 
-            {/* 5. Collapsible 글자 간격 (자간 / 행간 / 텍스트 상하 위치) - white bg with top/bottom dividers */}
-            <div className="border-y border-stone-200 py-2.5 bg-white">
+            {/* 5. Collapsible 글자 간격 (자간 / 행간 / 텍스트 상하 위치) */}
+            <div className="border-t border-stone-200 pt-2.5 bg-white">
               <button
                 type="button"
                 onClick={() => setIsSpacingOpen((prev) => !prev)}
@@ -505,21 +460,7 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
 
                   {/* Text Vertical Offset (텍스트 상하 위치 미세조정) */}
                   <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-stone-600">텍스트 상하 위치</span>
-                      {(currentStyle.textOffsetY ?? 0) !== 0 && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onUpdateSideStyle(activeSide, { textOffsetY: 0 })
-                          }
-                          className="rounded bg-stone-200/80 px-1.5 py-0.5 text-[10px] font-medium text-stone-600 hover:bg-stone-300"
-                          title="텍스트 상하 위치 0px로 초기화"
-                        >
-                          초기화
-                        </button>
-                      )}
-                    </div>
+                    <span className="text-stone-600">텍스트 상하 위치</span>
                     <div className="flex items-center gap-2">
                       <input
                         type="range"
@@ -645,8 +586,8 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
               </div>
             </div>
 
-            {/* Collapsible sections: 말풍선 크기 & 스타일 (white bg with top/bottom dividers) */}
-            <div className="divide-y divide-stone-200 border-y border-stone-200 bg-white">
+            {/* Collapsible sections: 말풍선 크기 & 스타일 */}
+            <div className="divide-y divide-stone-200 border-t border-stone-200 bg-white">
               {/* 1) 말풍선 크기 (모서리 둥글기 / 상하·좌우 여백) */}
               <div className="py-2.5">
                 <button
@@ -790,7 +731,7 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
               </div>
 
               {/* 2) 스타일 (말풍선 꼬리 + 외곽 테두리 & 그림자) */}
-              <div className="py-2.5">
+              <div className="pt-2.5">
                 <button
                   type="button"
                   onClick={() => setIsBubbleStyleOpen((prev) => !prev)}
@@ -1093,6 +1034,20 @@ export const BatchSideStylePanel: React.FC<BatchSideStylePanelProps> = ({
             </div>
           </div>
         )}
+      </div>
+
+      {/* Copy Current Side Style to Other Sides (Moved to very bottom) */}
+      <div className="grid grid-cols-2 gap-2">
+        {otherSides.map((target) => (
+          <button
+            key={target}
+            type="button"
+            onClick={() => handleCopy(target)}
+            className="flex items-center justify-center rounded-xl border border-stone-200 bg-white py-2 px-2.5 text-[11px] font-semibold text-stone-700 shadow-2xs hover:bg-stone-50 hover:text-stone-900 transition cursor-pointer"
+          >
+            이 서식을 {sideLabel(target)}에 복사
+          </button>
+        ))}
       </div>
     </div>
   );

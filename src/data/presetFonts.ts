@@ -1962,7 +1962,7 @@ export function getColorLuminance(color: string): number {
 
 export const INITIAL_CANVAS_CONFIG: CanvasConfig = {
   width: 760,
-  minHeight: 640,
+  minHeight: 120,
   bgColor: '#faf9f8',
   bgImageUrl: '',
   bgImageFit: 'cover',

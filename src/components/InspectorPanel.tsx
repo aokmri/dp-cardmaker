@@ -599,7 +599,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
               {/* 1. Direct Text Content Editor */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-stone-600">내용</label>
+                <label className="text-xs font-semibold text-stone-700">내용</label>
                 <textarea
                   rows={3}
                   value={selectedBubble.text}
@@ -642,7 +642,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     {/* Font Selector */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between gap-1">
-                        <label className="text-xs font-semibold text-stone-600">폰트</label>
+                        <label className="text-xs font-semibold text-stone-700">폰트</label>
                       </div>
 
                       <FontSelectDropdown
@@ -667,7 +667,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     {/* Text Formatting Bar: B, I, S(취소표), U, Align */}
                     <div className="space-y-2 pt-3.5 border-t border-stone-200">
                       <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-stone-600">글자 서식 & 정렬</label>
+                        <label className="text-xs font-semibold text-stone-700">글자 서식 & 정렬</label>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-1 rounded-lg border border-stone-200 bg-stone-50/60 p-1">
@@ -788,7 +788,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     {/* Font Size */}
                     <div className="space-y-1 pt-3.5 border-t border-stone-200">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-stone-600">글자 크기</span>
+                        <span className="font-semibold text-stone-700">글자 크기</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <input
@@ -808,7 +808,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     {/* Text Color */}
                     <div className="pt-3.5 border-t border-stone-200">
                       <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-stone-600">글자 색상</label>
+                        <label className="text-xs font-semibold text-stone-700">글자 색상</label>
                       </div>
                       <div className="mt-1.5 flex items-center gap-2">
                         <input
@@ -839,14 +839,14 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       </div>
                     </div>
 
-                    {/* Collapsible 글자 간격 (자간 / 행간 / 텍스트 상하 위치) - white bg with top/bottom dividers */}
-                    <div className="border-y border-stone-200 py-2.5 bg-white">
+                    {/* Collapsible 글자 간격 (자간 / 행간 / 텍스트 상하 위치) */}
+                    <div className="border-t border-stone-200 pt-2.5 bg-white">
                       <button
                         type="button"
                         onClick={() => setIsSingleSpacingOpen((prev) => !prev)}
                         className="flex w-full items-center justify-between text-left hover:text-stone-900 transition cursor-pointer"
                       >
-                        <span className="text-xs font-semibold text-stone-600">
+                        <span className="text-xs font-semibold text-stone-700">
                           글자 간격
                         </span>
                         <ChevronDown
@@ -902,19 +902,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
                           {/* Text Vertical Offset (텍스트 상하 위치 미세조정) */}
                           <div className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-stone-600">텍스트 상하 위치</span>
-                              {(selectedBubble.textOffsetY ?? 0) !== 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => onUpdateBubble({ textOffsetY: 0 })}
-                                  className="rounded bg-stone-200/80 px-1.5 py-0.5 text-[10px] font-medium text-stone-600 hover:bg-stone-300"
-                                  title="텍스트 상하 위치 0px로 초기화"
-                                >
-                                  초기화
-                                </button>
-                              )}
-                            </div>
+                            <span className="text-stone-600">텍스트 상하 위치</span>
                             <div className="flex items-center gap-2">
                               <input
                                 type="range"
@@ -986,7 +974,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
                     {/* Bubble Background Color */}
                     <div className="pt-3.5 border-t border-stone-200">
-                      <label className="text-xs font-semibold text-stone-600">말풍선 배경색</label>
+                      <label className="text-xs font-semibold text-stone-700">말풍선 배경색</label>
                       <div className="mt-1.5 flex items-center gap-2">
                         <input
                           type="color"
@@ -1026,8 +1014,8 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       </div>
                     </div>
 
-                    {/* Collapsible sections: 말풍선 크기 & 스타일 (white bg with top/bottom dividers) */}
-                    <div className="divide-y divide-stone-200 border-y border-stone-200 bg-white">
+                    {/* Collapsible sections: 말풍선 크기 & 스타일 */}
+                    <div className="divide-y divide-stone-200 border-t border-stone-200 bg-white">
                       {/* 1) 말풍선 크기 (모서리 둥글기 / 상하·좌우 여백) */}
                       <div className="py-2.5">
                         <button
@@ -1035,7 +1023,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                           onClick={() => setIsSingleBubbleSizeOpen((prev) => !prev)}
                           className="flex w-full items-center justify-between text-left hover:text-stone-900 transition cursor-pointer"
                         >
-                          <span className="text-xs font-semibold text-stone-600">
+                          <span className="text-xs font-semibold text-stone-700">
                             말풍선 크기
                           </span>
                           <ChevronDown
@@ -1159,13 +1147,13 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       </div>
 
                       {/* 2) 스타일 (말풍선 꼬리 + 외곽 테두리 & 그림자) */}
-                      <div className="py-2.5">
+                      <div className="pt-2.5">
                         <button
                           type="button"
                           onClick={() => setIsSingleBubbleStyleOpen((prev) => !prev)}
                           className="flex w-full items-center justify-between text-left hover:text-stone-900 transition cursor-pointer"
                         >
-                          <span className="text-xs font-semibold text-stone-600">
+                          <span className="text-xs font-semibold text-stone-700">
                             스타일
                           </span>
                           <ChevronDown
@@ -1541,7 +1529,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             {onApplyTheme && (
               <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50/70 p-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-stone-800">카드 테마</label>
+                  <label className="text-xs font-semibold text-stone-700">카드 테마</label>
                   <span className="text-[10px] text-stone-500">클릭 시 서식 일괄 변경</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
@@ -1648,7 +1636,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 <div className="p-3.5 space-y-5 border-t border-stone-100">
                   {/* Card Background Color */}
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold text-stone-700">카드 배경색</label>
+                    <label className="block text-xs font-semibold text-stone-700">카드 배경색</label>
                     <div className="grid grid-cols-3 gap-2">
                       {COLOR_PALETTE.canvasBg.map((bg) => (
                         <button
@@ -1701,7 +1689,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     </div>
 
                     {/* Device Image Picker Button */}
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-center gap-2">
                       <label
                         className={`flex flex-1 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition cursor-pointer ${
                           canvasConfig.bgImageUrl
@@ -1845,7 +1833,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   </div>
 
                   {/* Top & Bottom Divider Lines */}
-                  <div className="border-y border-stone-200 py-3 space-y-3">
+                  <div className="border-t border-stone-200 pt-3 space-y-3">
                     <label className="flex items-center justify-between cursor-pointer">
                       <span className="text-xs font-semibold text-stone-700">상/하단 구분선</span>
                       <input
@@ -1928,9 +1916,9 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
               {isCanvasHeaderFooterOpen && (
                 <div className="p-3.5 border-t border-stone-100">
-                  <div className="divide-y divide-stone-200 border-y border-stone-200">
+                  <div className="divide-y divide-stone-200">
                     {/* 머릿말 */}
-                    <div className="space-y-2.5 py-3">
+                    <div className="space-y-2.5 pb-3">
                       <label className="flex items-center justify-between cursor-pointer">
                         <span className="text-xs font-semibold text-stone-700">
                           머릿말
@@ -2048,7 +2036,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     </div>
 
                     {/* 꼬리말 */}
-                    <div className="space-y-2.5 py-3">
+                    <div className="space-y-2.5 pt-3">
                       <label className="flex items-center justify-between cursor-pointer">
                         <span className="text-xs font-semibold text-stone-700">
                           꼬리말
@@ -2246,30 +2234,30 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     </div>
                   </div>
 
-                  {/* Card Min Height (세로 높이) */}
+                  {/* Card Min Height (세로 높이 - 말풍선 높이 기준 상대적 조정) */}
                   <div className="space-y-2 pt-4 border-t border-stone-200">
                     <label className="block text-xs font-semibold text-stone-700">세로 높이</label>
                     <div className="flex items-center justify-between text-xs">
                       <input
                         type="range"
-                        min="400"
-                        max="1200"
-                        step="50"
-                        value={canvasConfig.minHeight}
+                        min="0"
+                        max="500"
+                        step="10"
+                        value={canvasConfig.minHeight > 500 ? 120 : canvasConfig.minHeight}
                         onChange={(e) =>
                           onUpdateCanvasConfig({ minHeight: Number(e.target.value) })
                         }
                         className="w-full accent-stone-900"
                       />
                       <span className="w-12 text-right font-mono text-xs">
-                        {canvasConfig.minHeight}px
+                        +{canvasConfig.minHeight > 500 ? 120 : canvasConfig.minHeight}px
                       </span>
                     </div>
                   </div>
 
                   {/* Spacing */}
                   <div className="space-y-2 pt-4 border-t border-stone-200">
-                    <label className="text-xs font-semibold text-stone-700">말풍선 간 간격</label>
+                    <label className="block text-xs font-semibold text-stone-700">말풍선 간 간격</label>
                     <div className="flex items-center justify-between text-xs">
                       <input
                         type="range"

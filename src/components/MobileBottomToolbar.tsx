@@ -79,6 +79,7 @@ interface MobileBottomToolbarProps {
   ) => void;
   onSaveSideStyle: (side: 'left' | 'right' | 'center') => void;
   onRevertSideStyle: (side: 'left' | 'right' | 'center') => void;
+  onRevertUnsavedSideStyles?: () => void;
   onCopySideStyle: (
     fromSide: 'left' | 'right' | 'center',
     toSide: 'left' | 'right' | 'center'
@@ -106,6 +107,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
   onUpdateSideStyle,
   onSaveSideStyle,
   onRevertSideStyle,
+  onRevertUnsavedSideStyles,
   onCopySideStyle,
   activeBatchSide,
   onActiveBatchSideChange,
@@ -134,7 +136,14 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
     window.setTimeout(() => setToastMsg(null), 1800);
   };
 
+  const closeTool = () => {
+    onRevertUnsavedSideStyles?.();
+    setExpandedSliderKey(null);
+    setOpenTool(null);
+  };
+
   const toggleTool = (tool: Exclude<MobileToolId, null>) => {
+    onRevertUnsavedSideStyles?.();
     setExpandedSliderKey(null);
     setOpenTool((prev) => (prev === tool ? null : tool));
   };
@@ -565,6 +574,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
           <button
             type="button"
             onClick={() => {
+              onRevertUnsavedSideStyles?.();
               setEditMode('single');
               if (!selectedBubble && bubbles.length > 0) {
                 onSelectBubble(bubbles[0].id);
@@ -657,7 +667,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
 
         <button
           type="button"
-          onClick={() => setOpenTool(null)}
+          onClick={closeTool}
           aria-label="설정창 닫기"
           className="flex h-6 w-6 items-center justify-center rounded-full text-stone-500 hover:bg-stone-200/70 hover:text-stone-800"
         >
@@ -772,7 +782,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                 {/* 2) 폰트 */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-stone-600">
+                    <span className="text-[11px] font-semibold text-stone-700">
                       {isEditingSingle ? '폰트' : '기본 폰트'}
                     </span>
                     {!isEditingSingle && (
@@ -801,7 +811,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
 
                 {/* 3) 서식 (굵게/기울임/밑줄/취소선 + 정렬) */}
                 <div className="space-y-1.5 pt-2 border-t border-stone-100">
-                  <span className="block text-[11px] font-semibold text-stone-600">
+                  <span className="block text-[11px] font-semibold text-stone-700">
                     서식
                   </span>
                   <div className="flex items-center gap-1.5">
@@ -898,7 +908,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                 {/* 5) 글자 색상 */}
                 <div className="space-y-1.5 pt-2 border-t border-stone-100">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-stone-600">
+                    <span className="text-[11px] font-semibold text-stone-700">
                       글자 색상
                     </span>
                     <span className="font-mono text-[10px] text-stone-400">
@@ -935,7 +945,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                 </div>
 
                 {/* 6) 글자 간격 (자간, 행간, 텍스트 상하 위치) - 기본 접어두기 */}
-                <div className="border-y border-stone-200 py-2.5">
+                <div className="border-t border-stone-200 pt-2.5">
                   <button
                     type="button"
                     onClick={() => setIsTextSpacingOpen((prev) => !prev)}
@@ -1038,7 +1048,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                 {/* 2) 말풍선 배경색 */}
                 <div className="space-y-1.5 pt-2 border-t border-stone-100">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-stone-600">
+                    <span className="text-[11px] font-semibold text-stone-700">
                       말풍선 배경색
                     </span>
                     <span className="text-[10px] text-stone-500">
@@ -1202,7 +1212,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                 </div>
 
                 {/* 4) 스타일 (말풍선 꼬리, 테두리선, 그림자) - 기본 접어두기, 버튼식 */}
-                <div className="border-b border-stone-200 pb-2.5">
+                <div>
                   <button
                     type="button"
                     onClick={() => setIsBubbleStyleOpen((prev) => !prev)}
@@ -1538,7 +1548,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
 
                       <div className="grid grid-cols-2 gap-1.5">
                         <div>
-                          <label className="block text-[10px] font-medium text-stone-600 mb-0.5">
+                          <label className="block text-[11px] font-semibold text-stone-700 mb-0.5">
                             이름
                           </label>
                           <input
@@ -1554,7 +1564,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-medium text-stone-600 mb-0.5">
+                          <label className="block text-[11px] font-semibold text-stone-700 mb-0.5">
                             시간
                           </label>
                           <input
@@ -1572,7 +1582,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                       </div>
 
                       <div className="space-y-1">
-                        <label className="block text-[10px] font-medium text-stone-600">
+                        <label className="block text-[11px] font-semibold text-stone-700">
                           폰트
                         </label>
                         <FontSelectDropdown
@@ -1588,7 +1598,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                       </div>
 
                       <div className="space-y-1">
-                        <label className="block text-[10px] font-medium text-stone-600">
+                        <label className="block text-[11px] font-semibold text-stone-700">
                           색상
                         </label>
                         <div className="flex items-center gap-2">
@@ -1653,7 +1663,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                 {onApplyTheme && (
                   <div className="space-y-1.5 rounded-xl border border-stone-200 bg-stone-50/70 p-2.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-stone-800">
+                      <span className="text-[11px] font-semibold text-stone-700">
                         카드 테마
                       </span>
                       <span className="text-[10px] text-stone-500">
@@ -1717,9 +1727,9 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                   </div>
                 )}
 
-                {/* 3x2 Card Bg Grid + Custom Color */}
+                {/* 3x2 Card Bg Grid + Custom Color + Device Image Picker */}
                 <div className="space-y-1.5">
-                  <span className="text-[11px] font-semibold text-stone-600 block">
+                  <span className="text-[11px] font-semibold text-stone-700 block">
                     배경색
                   </span>
                   <div className="grid grid-cols-3 gap-1.5">
@@ -1784,36 +1794,36 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                       </span>
                     </label>
                   </div>
-                </div>
 
-                {/* Device Image Picker */}
-                <label className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs cursor-pointer">
-                  <ImageIcon className="h-4 w-4 shrink-0 text-amber-700" />
-                  <span className="text-[11px] font-medium text-stone-700">
-                    이미지 선택
-                  </span>
-                  <span className="ml-auto text-[10px] text-stone-400">
-                    {canvasConfig.bgImageUrl ? '적용됨' : '기기에서 불러오기'}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                          onUpdateCanvasConfig({
-                            bgImageUrl: reader.result as string,
-                          });
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                      e.target.value = '';
-                    }}
-                  />
-                </label>
+                  {/* Device Image Picker */}
+                  <label className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs cursor-pointer">
+                    <ImageIcon className="h-4 w-4 shrink-0 text-amber-700" />
+                    <span className="text-[11px] font-medium text-stone-700">
+                      이미지 선택
+                    </span>
+                    <span className="ml-auto text-[10px] text-stone-400">
+                      {canvasConfig.bgImageUrl ? '적용됨' : '기기에서 불러오기'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            onUpdateCanvasConfig({
+                              bgImageUrl: reader.result as string,
+                            });
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
 
                 {canvasConfig.bgImageUrl && (
                   <div className="rounded-xl border border-stone-200 bg-stone-50 p-2.5 space-y-2">
@@ -1858,7 +1868,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
 
                 {/* Paper Texture */}
                 <div className="space-y-1.5 pt-2 border-t border-stone-100">
-                  <span className="text-[11px] font-semibold text-stone-600 block">
+                  <span className="text-[11px] font-semibold text-stone-700 block">
                     종이 질감 효과
                   </span>
                   <div className="grid grid-cols-5 gap-1">
@@ -1890,9 +1900,9 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                 </div>
 
                 {/* Top/Bottom Dividers (종이질감효과 밑에 상하단 구분선 추가) */}
-                <div className="border-y border-stone-200 py-2.5 space-y-2">
+                <div className="border-t border-stone-200 pt-2.5 space-y-2">
                   <label className="flex items-center justify-between cursor-pointer">
-                    <span className="text-xs font-semibold text-stone-700">
+                    <span className="text-[11px] font-semibold text-stone-700">
                       상/하단 구분선
                     </span>
                     <input
@@ -1974,9 +1984,9 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
 
               <div className="overflow-y-auto p-3.5 space-y-3">
                 {/* 머릿말 & 꼬리말 */}
-                <div className="divide-y divide-stone-200 border-y border-stone-200">
+                <div className="divide-y divide-stone-200">
                   <div className="space-y-2 py-2.5">
-                    <label className="flex items-center justify-between text-xs font-semibold text-stone-700 cursor-pointer">
+                    <label className="flex items-center justify-between text-[11px] font-semibold text-stone-700 cursor-pointer">
                       <span>머릿말</span>
                       <input
                         type="checkbox"
@@ -2063,7 +2073,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                   </div>
 
                   <div className="space-y-2 py-2.5">
-                    <label className="flex items-center justify-between text-xs font-semibold text-stone-700 cursor-pointer">
+                    <label className="flex items-center justify-between text-[11px] font-semibold text-stone-700 cursor-pointer">
                       <span>꼬리말</span>
                       <input
                         type="checkbox"
@@ -2153,7 +2163,7 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                     <button
                       type="button"
                       onClick={() => setIsCardSizeGroupOpen((prev) => !prev)}
-                      className="flex w-full items-center justify-between text-xs font-semibold text-stone-700 text-left cursor-pointer"
+                      className="flex w-full items-center justify-between text-[11px] font-semibold text-stone-700 text-left cursor-pointer"
                     >
                       <span>카드 크기 조절</span>
                       <ChevronDown
@@ -2213,15 +2223,18 @@ export const MobileBottomToolbar: React.FC<MobileBottomToolbarProps> = ({
                           </div>
                         </div>
 
-                        {/* 2) 세로 길이 (접힌 슬라이드, PC의 최소세로높이와 동일 기능) */}
+                        {/* 2) 세로 길이 (접힌 슬라이드, 말풍선 높이 기준 상대적 세로 높이 조절) */}
                         {renderCollapsibleSlider({
                           sliderKey: 'canvas-minHeight',
                           label: '세로 길이',
-                          displayValue: `${canvasConfig.minHeight}px`,
-                          value: canvasConfig.minHeight,
-                          min: 400,
-                          max: 1200,
-                          step: 50,
+                          displayValue: `+${
+                            canvasConfig.minHeight > 500 ? 120 : canvasConfig.minHeight
+                          }px`,
+                          value:
+                            canvasConfig.minHeight > 500 ? 120 : canvasConfig.minHeight,
+                          min: 0,
+                          max: 500,
+                          step: 10,
                           onChange: (minHeight) =>
                             onUpdateCanvasConfig({ minHeight }),
                         })}

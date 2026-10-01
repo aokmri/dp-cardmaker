@@ -277,6 +277,12 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
     onClose();
   };
 
+  useEffect(() => {
+    if (!isOpen) {
+      resetModalTextAndState();
+    }
+  }, [isOpen]);
+
   const parsed = useMemo(() => parseMailboxNotes(inputText), [inputText]);
 
   // Extract the font specifically used for each '대화' (dialogue) from pasted HTML
@@ -593,14 +599,14 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
     });
 
     onImport(generatedBubbles, importMode);
-    onClose();
+    handleCloseWithReset();
   };
 
   return (
     <div
       id="text-import-modal-backdrop"
       className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4 backdrop-blur-xs"
-      onClick={onClose}
+      onClick={handleCloseWithReset}
     >
       <div
         id="text-import-modal"
@@ -1135,7 +1141,7 @@ export const TextImportModal: React.FC<TextImportModalProps> = ({
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleCloseWithReset}
               className="rounded-lg border border-stone-200 px-4 py-2 text-xs font-medium text-stone-600 hover:bg-stone-50 cursor-pointer"
             >
               취소
