@@ -56,3 +56,12 @@
   text-underline-offset: 3px;
 }
 
+/* Keep empty speech bubbles clickable and visible while editing */
+[contenteditable][data-empty="true"]::before {
+  content: attr(data-placeholder);
+  color: currentColor;
+  opacity: 0.32;
+  pointer-events: none;
+}
+
+

@@ -298,8 +298,17 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
 
     const metaEl = insideMetaRef.current;
     const metaWidth = metaEl ? metaEl.offsetWidth : 0;
+    const plainContent = (textEl.innerText || '').replace(/\n/g, '').trim();
 
-    if (minLeft < Infinity && maxRight > minLeft) {
+    if (plainContent.length === 0) {
+      const borderExtra = bubble.hasBorder ? 2 : 0;
+      const activePadX =
+        bubble.bubbleShape === 'cloud'
+          ? (bubble.cloudPaddingX ?? 24)
+          : bubble.paddingX;
+      const minEmptyInnerWidth = isExporting ? Math.max(metaWidth, 24) : Math.max(metaWidth, 72);
+      boxEl.style.width = `${minEmptyInnerWidth + activePadX * 2 + borderExtra}px`;
+    } else if (minLeft < Infinity && maxRight > minLeft) {
       const tightTextWidth = (maxRight - minLeft) / scale;
       const requiredInnerWidth = Math.max(tightTextWidth, metaWidth);
       if (requiredInnerWidth > 0 && requiredInnerWidth < elClientWidth - 1) {
@@ -332,14 +341,18 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
           : { width: measuredW, height: measuredH }
       );
     }
-  }, [bubble.bubbleShape, bubble.cloudPaddingX, bubble.hasBorder, bubble.paddingX]);
+  }, [bubble.bubbleShape, bubble.cloudPaddingX, bubble.hasBorder, bubble.paddingX, isExporting]);
 
   // Sync initial or updated html into contentEditable without interrupting typing, then fit width
   useLayoutEffect(() => {
-    if (textEditableRef.current) {
+    const el = textEditableRef.current;
+    if (el) {
       const targetHtml = bubble.html || formatInitialTextToHtml(bubble.text);
-      if (textEditableRef.current.innerHTML !== targetHtml) {
-        textEditableRef.current.innerHTML = targetHtml;
+      const isFocused = document.activeElement === el;
+      const currentClean = el.innerHTML === '<br>' ? '' : el.innerHTML;
+      const targetClean = targetHtml === '<br>' ? '' : targetHtml;
+      if (currentClean !== targetClean && !(isFocused && targetClean === '' && el.innerHTML === '<br>')) {
+        el.innerHTML = targetHtml;
       }
     }
     fitBubbleToWrappedText();
@@ -455,9 +468,14 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
   const handleInput = () => {
     fitBubbleToWrappedText();
     if (textEditableRef.current) {
+      const rawHtml = textEditableRef.current.innerHTML;
+      const rawText = textEditableRef.current.innerText;
+      const isEffectivelyEmpty =
+        rawText.replace(/\n/g, '').trim().length === 0 &&
+        (rawHtml === '' || rawHtml === '<br>');
       onUpdate({
-        html: textEditableRef.current.innerHTML,
-        text: textEditableRef.current.innerText,
+        html: isEffectivelyEmpty ? '' : rawHtml,
+        text: isEffectivelyEmpty ? '' : rawText,
       });
     }
   };
@@ -542,6 +560,13 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
   if (bubble.isStrikethrough) textDecorations.push('line-through');
   if (bubble.isUnderline) textDecorations.push('underline');
 
+  const isBubbleTextEmpty =
+    !bubble.text || bubble.text.replace(/\n/g, '').trim().length === 0;
+  const minLineHeightPx = Math.max(
+    20,
+    Math.round(bubble.fontSize * (bubble.lineHeight || 1.6))
+  );
+
   const textStyle: React.CSSProperties = {
     fontFamily: bubble.fontFamily,
     fontSize: `${bubble.fontSize}px`,
@@ -552,6 +577,8 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     textAlign: bubble.textAlign,
     letterSpacing: bubble.letterSpacing ? `${bubble.letterSpacing}px` : 'normal',
     lineHeight: bubble.lineHeight || 1.6,
+    minHeight: `${minLineHeightPx}px`,
+    minWidth: !isExporting && isBubbleTextEmpty ? '64px' : '12px',
     whiteSpace: 'pre-wrap',
     wordBreak: 'keep-all',
     overflowWrap: 'break-word',
@@ -768,7 +795,28 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
           ref={bubbleBoxRef}
           id={`bubble-box-${bubble.id}`}
           style={bubbleContainerStyle}
-          className={`relative transition-shadow duration-150 ${
+          onClick={(e) => {
+            if (isExporting) return;
+            const target = e.target as HTMLElement;
+            const textEl = textEditableRef.current;
+            if (
+              textEl &&
+              target !== textEl &&
+              !textEl.contains(target) &&
+              !insideMetaRef.current?.contains(target)
+            ) {
+              textEl.focus();
+              const sel = window.getSelection();
+              if (sel) {
+                const range = document.createRange();
+                range.selectNodeContents(textEl);
+                range.collapse(false);
+                sel.removeAllRanges();
+                sel.addRange(range);
+              }
+            }
+          }}
+          className={`relative cursor-text transition-shadow duration-150 ${
             isSelected && !isExporting
               ? 'ring-2 ring-amber-500/70 ring-offset-2 ring-offset-transparent'
               : 'hover:ring-1 hover:ring-stone-300'
@@ -795,6 +843,8 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
             id={`bubble-text-${bubble.id}`}
             contentEditable={!isExporting}
             suppressContentEditableWarning={true}
+            data-empty={!isExporting && isBubbleTextEmpty ? 'true' : undefined}
+            data-placeholder="내용 입력..."
             onInput={handleInput}
             onPaste={handlePaste}
             onBlur={handleBlur}
