@@ -78,7 +78,7 @@
   display: none;
 }
 
-/* Spoiler masking: black rectangular box matching the exact width and 1em height of the specified font */
+/* Spoiler masking: black rectangular box matching the exact width and capital height (1cap) of the specified font */
 [data-spoiler="true"],
 [data-spoiler="true"] * {
   color: transparent !important;
@@ -88,7 +88,8 @@
   background-image: linear-gradient(#000000, #000000) !important;
   background-repeat: no-repeat !important;
   background-position: center center !important;
-  background-size: 100% 1em !important;
+  background-size: 100% 0.74em !important;
+  background-size: 100% 1cap !important;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }

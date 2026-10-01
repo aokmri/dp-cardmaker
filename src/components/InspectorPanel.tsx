@@ -224,12 +224,44 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
     setTimeout(() => setSaveSuccessMsg(null), 2200);
   };
 
+  const resolveActiveBubbleSelection = (): Range | null => {
+    if (!selectedBubble) return null;
+    const isMobile =
+      typeof window !== 'undefined' &&
+      (window.innerWidth < 768 ||
+        Boolean(window.matchMedia && window.matchMedia('(pointer: coarse)').matches));
+
+    let range = getSelectionWithinBubble(selectedBubble.id);
+    if (!range || range.collapsed || range.toString().length === 0) {
+      const ta = contentTextareaRef.current;
+      const start = ta && ta.selectionStart !== ta.selectionEnd
+        ? ta.selectionStart
+        : textareaSelectionRef.current.start;
+      const end = ta && ta.selectionStart !== ta.selectionEnd
+        ? ta.selectionEnd
+        : textareaSelectionRef.current.end;
+      if (start !== end) {
+        selectBubbleRangeByTextOffsets(selectedBubble.id, start, end);
+        range = getSelectionWithinBubble(selectedBubble.id);
+      }
+    }
+
+    if (isMobile && range && !range.collapsed && range.toString().length > 0) {
+      const bubbleTextEl = document.getElementById(`bubble-text-${selectedBubble.id}`);
+      bubbleTextEl?.setAttribute('inputmode', 'none');
+      bubbleTextEl?.blur();
+      contentTextareaRef.current?.blur();
+    }
+
+    return range;
+  };
+
   // Rich text formatting handlers for selected text substring vs whole bubble
   const handleFormatCommand = (
     command: 'bold' | 'italic' | 'underline' | 'strikeThrough'
   ) => {
     if (!selectedBubble) return;
-    const hasSelection = getSelectionWithinBubble(selectedBubble.id);
+    const hasSelection = resolveActiveBubbleSelection();
     if (hasSelection && !hasSelection.collapsed && hasSelection.toString().length > 0) {
       formatSelection(selectedBubble.id, { command }, (newHtml, newText) => {
         onUpdateBubble({ html: newHtml, text: newText });
@@ -244,7 +276,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
   const handleTextColor = (color: string) => {
     if (!selectedBubble) return;
-    const hasSelection = getSelectionWithinBubble(selectedBubble.id);
+    const hasSelection = resolveActiveBubbleSelection();
     if (hasSelection && !hasSelection.collapsed && hasSelection.toString().length > 0) {
       formatSelection(selectedBubble.id, { color }, (newHtml, newText) => {
         onUpdateBubble({ html: newHtml, text: newText });
@@ -256,7 +288,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
   const handleFontSize = (fontSize: number) => {
     if (!selectedBubble) return;
-    const hasSelection = getSelectionWithinBubble(selectedBubble.id);
+    const hasSelection = resolveActiveBubbleSelection();
     if (hasSelection && !hasSelection.collapsed && hasSelection.toString().length > 0) {
       formatSelection(selectedBubble.id, { fontSize }, (newHtml, newText) => {
         onUpdateBubble({ html: newHtml, text: newText });
@@ -268,7 +300,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
   const handleFontFamily = (fontFamily: string) => {
     if (!selectedBubble) return;
-    const hasSelection = getSelectionWithinBubble(selectedBubble.id);
+    const hasSelection = resolveActiveBubbleSelection();
     if (hasSelection && !hasSelection.collapsed && hasSelection.toString().length > 0) {
       formatSelection(selectedBubble.id, { fontFamily }, (newHtml, newText) => {
         onUpdateBubble({ html: newHtml, text: newText });
@@ -284,16 +316,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
   const handleToggleSpoiler = () => {
     if (!selectedBubble) return;
-    const canvasSel = getSelectionWithinBubble(selectedBubble.id);
-    if (!canvasSel || canvasSel.collapsed || canvasSel.toString().length === 0) {
-      const ta = contentTextareaRef.current;
-      const start = ta ? ta.selectionStart : textareaSelectionRef.current.start;
-      const end = ta ? ta.selectionEnd : textareaSelectionRef.current.end;
-      if (start !== end) {
-        selectBubbleRangeByTextOffsets(selectedBubble.id, start, end);
-        textareaSelectionRef.current = { start: 0, end: 0 };
-      }
-    }
+    resolveActiveBubbleSelection();
     toggleSpoilerInBubble(selectedBubble.id, (newHtml, newText) => {
       onUpdateBubble({ html: newHtml, text: newText });
     });

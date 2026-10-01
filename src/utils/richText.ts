@@ -535,6 +535,94 @@ function cleanEmptySpans(root: DocumentFragment) {
   });
 }
 
+function isMobileOrTouchViewport(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.innerWidth < 768 ||
+    Boolean(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+  );
+}
+
+function isCommandActiveInRange(
+  container: HTMLElement,
+  range: Range,
+  command: 'bold' | 'italic' | 'underline' | 'strikeThrough'
+): boolean {
+  let targetNode: Node | null = range.startContainer;
+  if (targetNode.nodeType !== Node.TEXT_NODE) {
+    const walker = document.createTreeWalker(
+      range.commonAncestorContainer,
+      NodeFilter.SHOW_TEXT
+    );
+    let n = walker.nextNode();
+    while (n) {
+      try {
+        if (range.intersectsNode(n) && (n.nodeValue || '').trim().length > 0) {
+          targetNode = n;
+          break;
+        }
+      } catch {
+        // ignore
+      }
+      n = walker.nextNode();
+    }
+  }
+
+  let curr: HTMLElement | null =
+    targetNode && targetNode.nodeType === Node.TEXT_NODE
+      ? targetNode.parentElement
+      : (targetNode as HTMLElement | null);
+
+  let foundExplicit: boolean | null = null;
+  while (curr && container.contains(curr)) {
+    const tag = curr.tagName.toUpperCase();
+    if (command === 'bold') {
+      if (tag === 'B' || tag === 'STRONG') return true;
+      const fw = (curr.style.fontWeight || '').trim().toLowerCase();
+      if (fw) {
+        if (fw === 'bold' || fw === 'bolder' || /^[6-9]00$/.test(fw)) {
+          return true;
+        }
+        if (fw === 'normal' || fw === 'lighter' || /^[1-5]00$/.test(fw)) {
+          foundExplicit = false;
+          break;
+        }
+      }
+    } else if (command === 'italic') {
+      if (tag === 'I' || tag === 'EM') return true;
+      const fs = (curr.style.fontStyle || '').trim().toLowerCase();
+      if (fs) {
+        if (fs === 'italic' || fs === 'oblique') return true;
+        if (fs === 'normal') {
+          foundExplicit = false;
+          break;
+        }
+      }
+    } else if (command === 'underline') {
+      if (tag === 'U' || tag === 'INS') return true;
+      const td = `${curr.style.textDecoration || ''} ${curr.style.textDecorationLine || ''}`.toLowerCase();
+      if (td.includes('underline')) return true;
+      if (td.trim() === 'none') {
+        foundExplicit = false;
+        break;
+      }
+    } else if (command === 'strikeThrough') {
+      if (tag === 'S' || tag === 'STRIKE' || tag === 'DEL') return true;
+      const td = `${curr.style.textDecoration || ''} ${curr.style.textDecorationLine || ''}`.toLowerCase();
+      if (td.includes('line-through')) return true;
+      if (td.trim() === 'none') {
+        foundExplicit = false;
+        break;
+      }
+    }
+    if (curr === container) break;
+    curr = curr.parentElement;
+  }
+
+  if (foundExplicit !== null) return foundExplicit;
+  return false;
+}
+
 /**
  * Apply inline style or formatting command to the selected text within a bubble
  */
@@ -556,20 +644,32 @@ export function formatSelection(
     return false;
   }
 
-  // Ensure selection is active in DOM when not actively dragging a native input control
+  const isMobile = isMobileOrTouchViewport();
   const activeEl = document.activeElement as HTMLElement | null;
   const isUsingInputControl =
     activeEl &&
     (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT');
 
   const sel = window.getSelection();
-  if (sel && !isUsingInputControl) {
-    sel.removeAllRanges();
-    sel.addRange(range);
-  }
-
-  if (!isUsingInputControl) {
-    container.focus();
+  if (isMobile) {
+    // Prevent virtual keyboard from popping up on mobile when formatting dragged text
+    container.setAttribute('inputmode', 'none');
+    if (
+      activeEl &&
+      (activeEl === container ||
+        container.contains(activeEl) ||
+        activeEl.tagName === 'TEXTAREA')
+    ) {
+      activeEl.blur();
+    }
+  } else {
+    if (sel && !isUsingInputControl) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    if (!isUsingInputControl) {
+      container.focus();
+    }
   }
 
   if (options.color) {
@@ -584,8 +684,10 @@ export function formatSelection(
     try {
       const spoilersInSelection = getSpoilerElementsInRange(container, range);
       spoilersInSelection.forEach((sp) => restoreSpoilerElement(sp));
-      document.execCommand('removeFormat', false);
-      // Also clean any leftover inline styles inside the range
+      if (!isMobile) {
+        document.execCommand('removeFormat', false);
+      }
+      // Clean any inline formatting tags and styles inside the range
       const fragment = range.extractContents();
       const allEls = fragment.querySelectorAll('*');
       allEls.forEach((el) => {
@@ -598,18 +700,72 @@ export function formatSelection(
           }
         }
       });
+      let inlineTag = fragment.querySelector('b,strong,i,em,u,ins,s,strike,del,font');
+      while (inlineTag && inlineTag.parentNode) {
+        const parent = inlineTag.parentNode;
+        while (inlineTag.firstChild) {
+          parent.insertBefore(inlineTag.firstChild, inlineTag);
+        }
+        parent.removeChild(inlineTag);
+        inlineTag = fragment.querySelector('b,strong,i,em,u,ins,s,strike,del,font');
+      }
       cleanEmptySpans(fragment);
-      range.insertNode(fragment);
+      const wrapSpan = document.createElement('span');
+      wrapSpan.appendChild(fragment);
+      range.insertNode(wrapSpan);
+      const newRange = document.createRange();
+      newRange.selectNodeContents(wrapSpan);
+      savedRange = newRange.cloneRange();
+      savedBubbleId = bubbleId;
+      // Unwrap temporary marker span while keeping savedRange valid
+      const parent = wrapSpan.parentNode;
+      if (parent && wrapSpan.firstChild) {
+        const firstChild = wrapSpan.firstChild;
+        const lastChild = wrapSpan.lastChild!;
+        while (wrapSpan.firstChild) {
+          parent.insertBefore(wrapSpan.firstChild, wrapSpan);
+        }
+        parent.removeChild(wrapSpan);
+        const unwrappedRange = document.createRange();
+        unwrappedRange.setStartBefore(firstChild);
+        unwrappedRange.setEndAfter(lastChild);
+        savedRange = unwrappedRange.cloneRange();
+        if (!isMobile && sel && !isUsingInputControl) {
+          sel.removeAllRanges();
+          sel.addRange(unwrappedRange);
+        }
+      }
       executed = true;
     } catch {
-      document.execCommand('removeFormat', false);
+      if (!isMobile) {
+        document.execCommand('removeFormat', false);
+      }
       executed = true;
     }
-  } else if (options.command) {
-    document.execCommand(options.command, false);
-    executed = true;
-  } else if (options.fontSize || options.fontFamily || options.color) {
+  } else if (
+    options.command ||
+    options.fontSize ||
+    options.fontFamily ||
+    options.color
+  ) {
     try {
+      const cmd = options.command;
+      const nextCommandActive = cmd
+        ? !isCommandActiveInRange(container, range, cmd)
+        : false;
+      const keepUnderline =
+        cmd === 'underline'
+          ? nextCommandActive
+          : cmd === 'strikeThrough'
+          ? isCommandActiveInRange(container, range, 'underline')
+          : false;
+      const keepStrike =
+        cmd === 'strikeThrough'
+          ? nextCommandActive
+          : cmd === 'underline'
+          ? isCommandActiveInRange(container, range, 'strikeThrough')
+          : false;
+
       const commonNode = range.commonAncestorContainer;
       const parentEl =
         commonNode.nodeType === Node.TEXT_NODE
@@ -618,6 +774,79 @@ export function formatSelection(
       const selectedText = range.toString();
 
       let targetSpan: HTMLSpanElement | null = null;
+
+      const clearConflictingStylesOnDescendant = (node: HTMLElement) => {
+        if (options.fontSize) {
+          node.style.removeProperty('font-size');
+          if (node.tagName.toLowerCase() === 'font' && node.hasAttribute('size')) {
+            node.removeAttribute('size');
+          }
+        }
+        if (options.fontFamily) {
+          node.style.removeProperty('font-family');
+          if (node.tagName.toLowerCase() === 'font' && node.hasAttribute('face')) {
+            node.removeAttribute('face');
+          }
+        }
+        if (options.color) {
+          node.style.removeProperty('color');
+          if (node.tagName.toLowerCase() === 'font' && node.hasAttribute('color')) {
+            node.removeAttribute('color');
+          }
+        }
+        if (cmd === 'bold') {
+          node.style.removeProperty('font-weight');
+          const tag = node.tagName.toUpperCase();
+          if (tag === 'B' || tag === 'STRONG') {
+            node.style.fontWeight = 'inherit';
+          }
+        }
+        if (cmd === 'italic') {
+          node.style.removeProperty('font-style');
+          const tag = node.tagName.toUpperCase();
+          if (tag === 'I' || tag === 'EM') {
+            node.style.fontStyle = 'inherit';
+          }
+        }
+        if (cmd === 'underline' || cmd === 'strikeThrough') {
+          node.style.removeProperty('text-decoration');
+          node.style.removeProperty('text-decoration-line');
+          const tag = node.tagName.toUpperCase();
+          if (
+            tag === 'U' ||
+            tag === 'INS' ||
+            tag === 'S' ||
+            tag === 'STRIKE' ||
+            tag === 'DEL'
+          ) {
+            node.style.textDecoration = 'none';
+          }
+        }
+      };
+
+      const applyRequestedStyleToSpan = (span: HTMLSpanElement) => {
+        if (options.fontSize) {
+          span.style.fontSize = `${options.fontSize}px`;
+        }
+        if (options.fontFamily) {
+          span.style.fontFamily = options.fontFamily;
+        }
+        if (options.color) {
+          span.style.color = options.color;
+        }
+        if (cmd === 'bold') {
+          span.style.fontWeight = nextCommandActive ? '700' : '400';
+        }
+        if (cmd === 'italic') {
+          span.style.fontStyle = nextCommandActive ? 'italic' : 'normal';
+        }
+        if (cmd === 'underline' || cmd === 'strikeThrough') {
+          const decs: string[] = [];
+          if (keepUnderline) decs.push('underline');
+          if (keepStrike) decs.push('line-through');
+          span.style.textDecoration = decs.length > 0 ? decs.join(' ') : 'none';
+        }
+      };
 
       if (
         parentEl &&
@@ -630,102 +859,53 @@ export function formatSelection(
         const allDescendants = targetSpan.querySelectorAll('*');
         allDescendants.forEach((node) => {
           if (node instanceof HTMLElement) {
-            if (options.fontSize) {
-              node.style.removeProperty('font-size');
-              if (node.tagName.toLowerCase() === 'font' && node.hasAttribute('size')) {
-                node.removeAttribute('size');
-              }
-            }
-            if (options.fontFamily) {
-              node.style.removeProperty('font-family');
-              if (node.tagName.toLowerCase() === 'font' && node.hasAttribute('face')) {
-                node.removeAttribute('face');
-              }
-            }
-            if (options.color) {
-              node.style.removeProperty('color');
-              if (node.tagName.toLowerCase() === 'font' && node.hasAttribute('color')) {
-                node.removeAttribute('color');
-              }
-            }
+            clearConflictingStylesOnDescendant(node);
           }
         });
-        if (options.fontSize) {
-          targetSpan.style.fontSize = `${options.fontSize}px`;
-        }
-        if (options.fontFamily) {
-          targetSpan.style.fontFamily = options.fontFamily;
-        }
-        if (options.color) {
-          targetSpan.style.color = options.color;
-        }
+        applyRequestedStyleToSpan(targetSpan);
       } else {
         const fragment = range.extractContents();
         const allDescendants = fragment.querySelectorAll('*');
 
-        // 1. Clear conflicting descendant styles so the newly chosen style rules all text uniformly
         allDescendants.forEach((node) => {
           if (node instanceof HTMLElement) {
-            if (options.fontSize) {
-              node.style.removeProperty('font-size');
-              if (node.tagName.toLowerCase() === 'font' && node.hasAttribute('size')) {
-                node.removeAttribute('size');
-              }
-            }
-            if (options.fontFamily) {
-              node.style.removeProperty('font-family');
-              if (node.tagName.toLowerCase() === 'font' && node.hasAttribute('face')) {
-                node.removeAttribute('face');
-              }
-            }
-            if (options.color) {
-              node.style.removeProperty('color');
-              if (node.tagName.toLowerCase() === 'font' && node.hasAttribute('color')) {
-                node.removeAttribute('color');
-              }
-            }
+            clearConflictingStylesOnDescendant(node);
           }
         });
 
-        // 2. Clean up any redundant empty spans inside the extracted fragment
         cleanEmptySpans(fragment);
 
-        // 3. Create the wrapping span with requested styles
         const span = document.createElement('span');
-        if (options.fontSize) {
-          span.style.fontSize = `${options.fontSize}px`;
-        }
-        if (options.fontFamily) {
-          span.style.fontFamily = options.fontFamily;
-        }
-        if (options.color) {
-          span.style.color = options.color;
-        }
+        applyRequestedStyleToSpan(span);
 
         span.appendChild(fragment);
         range.insertNode(span);
         targetSpan = span;
       }
 
-      // 4. Reselect the newly styled content
       if (targetSpan) {
         const newRange = document.createRange();
         newRange.selectNodeContents(targetSpan);
         savedRange = newRange.cloneRange();
         savedBubbleId = bubbleId;
-        if (sel && !isUsingInputControl) {
+        if (!isMobile && sel && !isUsingInputControl) {
           sel.removeAllRanges();
           sel.addRange(newRange);
         }
       }
       executed = true;
     } catch {
-      if (options.color) {
-        document.execCommand('foreColor', false, options.color);
-        executed = true;
-      } else if (options.fontFamily) {
-        document.execCommand('fontName', false, options.fontFamily);
-        executed = true;
+      if (!isMobile) {
+        if (options.command) {
+          document.execCommand(options.command, false);
+          executed = true;
+        } else if (options.color) {
+          document.execCommand('foreColor', false, options.color);
+          executed = true;
+        } else if (options.fontFamily) {
+          document.execCommand('fontName', false, options.fontFamily);
+          executed = true;
+        }
       }
     }
   }
@@ -736,8 +916,7 @@ export function formatSelection(
     if (onContentChange) {
       onContentChange(updatedHtml, updatedText);
     }
-    // Update saved range if browser selection is currently active inside the bubble
-    if (sel && sel.rangeCount > 0 && !isUsingInputControl) {
+    if (!isMobile && sel && sel.rangeCount > 0 && !isUsingInputControl) {
       const currentRange = sel.getRangeAt(0);
       if (
         !currentRange.collapsed &&
@@ -882,6 +1061,20 @@ export function toggleSpoilerInBubble(
   const container = document.getElementById(`bubble-text-${bubbleId}`);
   if (!container) return false;
 
+  const isMobile = isMobileOrTouchViewport();
+  const activeEl = document.activeElement as HTMLElement | null;
+  if (isMobile) {
+    container.setAttribute('inputmode', 'none');
+    if (
+      activeEl &&
+      (activeEl === container ||
+        container.contains(activeEl) ||
+        activeEl.tagName === 'TEXTAREA')
+    ) {
+      activeEl.blur();
+    }
+  }
+
   const sel = window.getSelection();
   let range = getSelectionWithinBubble(bubbleId);
 
@@ -928,7 +1121,7 @@ export function toggleSpoilerInBubble(
         newRange.setEndAfter(lastNode);
         savedRange = newRange.cloneRange();
         savedBubbleId = bubbleId;
-        if (sel) {
+        if (!isMobile && sel) {
           sel.removeAllRanges();
           sel.addRange(newRange);
         }
@@ -957,7 +1150,8 @@ export function toggleSpoilerInBubble(
     spoilerSpan.style.backgroundImage = 'linear-gradient(#000000, #000000)';
     spoilerSpan.style.backgroundRepeat = 'no-repeat';
     spoilerSpan.style.backgroundPosition = 'center center';
-    spoilerSpan.style.backgroundSize = '100% 1em';
+    spoilerSpan.style.backgroundSize = '100% 0.74em';
+    spoilerSpan.style.backgroundSize = '100% 1cap';
     spoilerSpan.style.boxDecorationBreak = 'clone';
     (spoilerSpan.style as unknown as Record<string, string>).webkitBoxDecorationBreak =
       'clone';
@@ -968,7 +1162,7 @@ export function toggleSpoilerInBubble(
     newRange.selectNodeContents(spoilerSpan);
     savedRange = newRange.cloneRange();
     savedBubbleId = bubbleId;
-    if (sel) {
+    if (!isMobile && sel) {
       sel.removeAllRanges();
       sel.addRange(newRange);
     }

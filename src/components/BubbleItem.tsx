@@ -463,6 +463,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
       if (!sel || sel.isCollapsed) {
         if (!isPointerDownInBubbleRef.current) {
           textEditableRef.current?.removeAttribute('data-ps-color-active');
+          textEditableRef.current?.removeAttribute('inputmode');
           setFloatingToolbarPos(null);
         }
         return;
@@ -488,6 +489,14 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
       isTextDraggingRef.current = true;
       didDragTextRef.current = true;
       clearLongPressTimer();
+
+      if (
+        typeof window !== 'undefined' &&
+        (window.innerWidth < 768 ||
+          Boolean(window.matchMedia && window.matchMedia('(pointer: coarse)').matches))
+      ) {
+        textEl.setAttribute('inputmode', 'none');
+      }
 
       const clamped = getClampedRangeInBubble(bubble.id, range);
       if (clamped && !clamped.collapsed && clamped.toString().trim().length > 0) {
