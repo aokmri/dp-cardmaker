@@ -57,11 +57,18 @@
 }
 
 /* Keep empty speech bubbles clickable and visible while editing */
+[contenteditable][data-empty="true"] {
+  white-space: nowrap !important;
+}
 [contenteditable][data-empty="true"]::before {
   content: attr(data-placeholder);
   color: currentColor;
   opacity: 0.32;
   pointer-events: none;
+  white-space: nowrap;
+}
+[contenteditable][data-empty="true"] br {
+  display: none;
 }
 
 

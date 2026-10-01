@@ -306,7 +306,10 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
         bubble.bubbleShape === 'cloud'
           ? (bubble.cloudPaddingX ?? 24)
           : bubble.paddingX;
-      const minEmptyInnerWidth = isExporting ? Math.max(metaWidth, 24) : Math.max(metaWidth, 72);
+      const placeholderWidth = Math.ceil(textEl.scrollWidth || bubble.fontSize * 4.8);
+      const minEmptyInnerWidth = isExporting
+        ? Math.max(metaWidth, 24)
+        : Math.max(metaWidth, placeholderWidth);
       boxEl.style.width = `${minEmptyInnerWidth + activePadX * 2 + borderExtra}px`;
     } else if (minLeft < Infinity && maxRight > minLeft) {
       const tightTextWidth = (maxRight - minLeft) / scale;

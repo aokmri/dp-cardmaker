@@ -1297,10 +1297,19 @@ export default function App() {
                 <span className="truncate text-stone-700 font-semibold">
                   이체통 출력소
                 </span>
-                <span className="truncate text-stone-500">
+                <span className="hidden md:inline truncate text-stone-500">
                   이세계 우체통 최적화 대화 백업 에디터
                 </span>
               </div>
+              <a
+                href="https://forms.gle/33DbRj5f4uLeisAXA"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="shrink-0 whitespace-nowrap text-right font-bold underline underline-offset-2 text-stone-600 hover:text-stone-900 transition-colors"
+              >
+                오류보고/문의
+              </a>
             </div>
 
             {/* Actual Card Rendered Container */}
