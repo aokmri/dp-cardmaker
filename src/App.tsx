@@ -972,11 +972,83 @@ export default function App() {
     });
   };
 
+  // Helper to save JSON preset via native OS Save As picker (folder + filename) on PC, with fallback
+  const saveJsonBlobWithPicker = async (
+    jsonData: unknown,
+    defaultFileName: string,
+    customFileName?: string,
+    forceDirectDownload?: boolean
+  ): Promise<'saved' | 'cancelled' | 'needs-dialog'> => {
+    const rawName =
+      (customFileName || defaultFileName).trim() || defaultFileName;
+    const finalFileName = rawName.toLowerCase().endsWith('.json')
+      ? rawName
+      : `${rawName}.json`;
+
+    const blob = new Blob([JSON.stringify(jsonData, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    });
+
+    const win = window as Window & {
+      showSaveFilePicker?: (options?: {
+        suggestedName?: string;
+        types?: {
+          description?: string;
+          accept: Record<string, string[]>;
+        }[];
+      }) => Promise<{
+        createWritable: () => Promise<{
+          write: (data: Blob) => Promise<void>;
+          close: () => Promise<void>;
+        }>;
+      }>;
+    };
+
+    if (!forceDirectDownload && typeof win.showSaveFilePicker === 'function') {
+      try {
+        const handle = await win.showSaveFilePicker({
+          suggestedName: finalFileName,
+          types: [
+            {
+              description: 'JSON 서식 파일',
+              accept: { 'application/json': ['.json'] },
+            },
+          ],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return 'saved';
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return 'cancelled';
+        }
+        if (!isMobileViewport && !customFileName) {
+          return 'needs-dialog';
+        }
+      }
+    } else if (!forceDirectDownload && !isMobileViewport && !customFileName) {
+      return 'needs-dialog';
+    }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = finalFileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return 'saved';
+  };
+
   // Export single side style preset (.json file)
-  const handleExportSidePreset = (
+  const handleExportSidePreset = async (
     side: 'left' | 'center' | 'right',
-    styleOverride?: BubbleSideStyle
-  ) => {
+    styleOverride?: BubbleSideStyle,
+    customFileName?: string,
+    forceDirectDownload?: boolean
+  ): Promise<'saved' | 'cancelled' | 'needs-dialog'> => {
     try {
       const styleToExport = styleOverride || defaultSideStyles[side];
       const usedCustomFonts = fonts.filter(
@@ -994,30 +1066,29 @@ export default function App() {
         style: styleToExport,
         customFonts: usedCustomFonts,
       };
-      const blob = new Blob([JSON.stringify(presetData, null, 2)], {
-        type: 'application/json;charset=utf-8',
-      });
-      const url = URL.createObjectURL(blob);
       const dateStr = new Date().toISOString().slice(0, 10);
       const sideKor =
         side === 'left' ? '왼쪽' : side === 'center' ? '중앙' : '오른쪽';
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `이체통-${sideKor}서식-${dateStr}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const defaultFileName = `${sideKor}서식-${dateStr}.json`;
+      return await saveJsonBlobWithPicker(
+        presetData,
+        defaultFileName,
+        customFileName,
+        forceDirectDownload
+      );
     } catch (err) {
       console.error('Failed to export side style preset', err);
+      return 'cancelled';
     }
   };
 
   // Export all styles + background preset (.json file)
-  const handleExportAllPreset = (
+  const handleExportAllPreset = async (
     sidesOverride?: DefaultSideStyles,
-    canvasOverride?: CanvasConfig
-  ) => {
+    canvasOverride?: CanvasConfig,
+    customFileName?: string,
+    forceDirectDownload?: boolean
+  ): Promise<'saved' | 'cancelled' | 'needs-dialog'> => {
     try {
       const presetData = {
         version: 1,
@@ -1027,20 +1098,17 @@ export default function App() {
         canvasConfig: canvasOverride || canvasConfig,
         customFonts: fonts.filter((f) => f.isCustom),
       };
-      const blob = new Blob([JSON.stringify(presetData, null, 2)], {
-        type: 'application/json;charset=utf-8',
-      });
-      const url = URL.createObjectURL(blob);
       const dateStr = new Date().toISOString().slice(0, 10);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `이체통-일괄서식-${dateStr}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const defaultFileName = `일괄서식-${dateStr}.json`;
+      return await saveJsonBlobWithPicker(
+        presetData,
+        defaultFileName,
+        customFileName,
+        forceDirectDownload
+      );
     } catch (err) {
       console.error('Failed to export style preset', err);
+      return 'cancelled';
     }
   };
 

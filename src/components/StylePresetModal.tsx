@@ -39,11 +39,18 @@ interface StylePresetModalProps {
   defaultSideStyles: DefaultSideStyles;
   canvasConfig: CanvasConfig;
   fonts: WebFont[];
-  onExportSidePreset: (side: SideKey, styleOverride?: BubbleSideStyle) => void;
+  onExportSidePreset: (
+    side: SideKey,
+    styleOverride?: BubbleSideStyle,
+    customFileName?: string,
+    forceDirectDownload?: boolean
+  ) => Promise<'saved' | 'cancelled' | 'needs-dialog'>;
   onExportAllPreset: (
     sidesOverride?: DefaultSideStyles,
-    canvasOverride?: CanvasConfig
-  ) => void;
+    canvasOverride?: CanvasConfig,
+    customFileName?: string,
+    forceDirectDownload?: boolean
+  ) => Promise<'saved' | 'cancelled' | 'needs-dialog'>;
   onApplySideStyle: (
     side: SideKey,
     style: BubbleSideStyle,
@@ -164,6 +171,56 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
     null
   );
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [exportDialogState, setExportDialogState] = useState<{
+    target: SideKey | 'all';
+    styleOverride?: BubbleSideStyle;
+    fileName: string;
+  } | null>(null);
+
+  const getDefaultExportFileName = (target: SideKey | 'all') => {
+    const dateStr = new Date().toISOString().slice(0, 10);
+    if (target === 'all') {
+      return `일괄서식-${dateStr}`;
+    }
+    const sideKor =
+      target === 'left' ? '왼쪽' : target === 'center' ? '중앙' : '오른쪽';
+    return `${sideKor}서식-${dateStr}`;
+  };
+
+  const handleConfirmExportDialog = async () => {
+    if (!exportDialogState) return;
+    const { target, styleOverride, fileName } = exportDialogState;
+    const trimmed = fileName.trim() || getDefaultExportFileName(target);
+    setExportDialogState(null);
+
+    if (target === 'all') {
+      const res = await onExportAllPreset(
+        defaultSideStyles,
+        canvasConfig,
+        trimmed,
+        true
+      );
+      if (res === 'saved') {
+        showToast('배경지를 포함한 전체 서식을 일괄 내보냈습니다.');
+      }
+    } else {
+      const res = await onExportSidePreset(
+        target,
+        styleOverride,
+        trimmed,
+        true
+      );
+      if (res === 'saved') {
+        const sideLabel =
+          target === 'left'
+            ? '왼쪽 말풍선'
+            : target === 'center'
+            ? '중앙 말풍선'
+            : '오른쪽 말풍선';
+        showToast(`${sideLabel} 서식을 파일로 저장했습니다.`);
+      }
+    }
+  };
 
   const textureLayer = useRasterizedPaperTexture(
     canvasConfig.bgColor,
@@ -781,9 +838,17 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => {
-                          onExportSidePreset(key, style);
-                          showToast(`${label} 서식을 파일로 저장했습니다.`);
+                        onClick={async () => {
+                          const res = await onExportSidePreset(key, style);
+                          if (res === 'saved') {
+                            showToast(`${label} 서식을 파일로 저장했습니다.`);
+                          } else if (res === 'needs-dialog') {
+                            setExportDialogState({
+                              target: key,
+                              styleOverride: style,
+                              fileName: getDefaultExportFileName(key),
+                            });
+                          }
                         }}
                         className="flex items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-700 shadow-2xs hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
                       >
@@ -932,9 +997,19 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
             <button
               type="button"
               id="btn-modal-batch-export"
-              onClick={() => {
-                onExportAllPreset(defaultSideStyles, canvasConfig);
-                showToast('배경지를 포함한 전체 서식을 일괄 내보냈습니다.');
+              onClick={async () => {
+                const res = await onExportAllPreset(
+                  defaultSideStyles,
+                  canvasConfig
+                );
+                if (res === 'saved') {
+                  showToast('배경지를 포함한 전체 서식을 일괄 내보냈습니다.');
+                } else if (res === 'needs-dialog') {
+                  setExportDialogState({
+                    target: 'all',
+                    fileName: getDefaultExportFileName('all'),
+                  });
+                }
               }}
               className="flex items-center justify-center gap-2 rounded-xl bg-stone-900 px-6 py-2.5 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-stone-800 active:scale-[0.99] transition cursor-pointer"
             >
@@ -987,6 +1062,90 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
             일괄 내보내기 시 왼쪽·중앙·오른쪽 말풍선 서식과 현재 배경지 설정이 함께 저장됩니다.
           </p>
         </div>
+
+        {/* Fallback File Name Dialog when native OS Save Picker is blocked by iframe or unsupported */}
+        {exportDialogState && (
+          <div
+            className="fixed inset-0 z-60 flex items-center justify-center bg-stone-950/50 p-4 backdrop-blur-xs"
+            onClick={() => setExportDialogState(null)}
+          >
+            <div
+              className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-5 shadow-2xl space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
+                    <FileDown className="h-4 w-4" />
+                  </div>
+                  <h3 className="text-sm font-bold text-stone-900">
+                    서식 파일 내보내기
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExportDialogState(null)}
+                  className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-stone-700">
+                  파일 이름
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={exportDialogState.fileName}
+                    onChange={(e) =>
+                      setExportDialogState((prev) =>
+                        prev ? { ...prev, fileName: e.target.value } : null
+                      )
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleConfirmExportDialog();
+                      } else if (e.key === 'Escape') {
+                        setExportDialogState(null);
+                      }
+                    }}
+                    placeholder={getDefaultExportFileName(
+                      exportDialogState.target
+                    )}
+                    className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs text-stone-800 focus:border-stone-900 focus:outline-none"
+                  />
+                  <span className="shrink-0 text-xs font-mono text-stone-500">
+                    .json
+                  </span>
+                </div>
+                <p className="text-[11px] text-stone-500 leading-relaxed">
+                  새 탭(독립 창)에서 실행하거나 브라우저 설정에서 &lsquo;다운로드 전에 각 파일의 저장 위치 확인&rsquo;을 켜면 저장 폴더를 직접 선택할 수 있습니다.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setExportDialogState(null)}
+                  className="rounded-xl border border-stone-200 px-4 py-2 text-xs font-medium text-stone-600 hover:bg-stone-50 cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmExportDialog}
+                  className="rounded-xl bg-stone-900 px-4 py-2 text-xs font-semibold text-white hover:bg-stone-800 cursor-pointer"
+                >
+                  저장하기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
