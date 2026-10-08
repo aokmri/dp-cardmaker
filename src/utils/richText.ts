@@ -99,6 +99,119 @@ export function recordSelection(bubbleId: string) {
 }
 
 /**
+ * Sanitizes rich text HTML for speech bubbles to ensure no executable scripts,
+ * event handlers, or unsafe tags can execute. Only allows safe formatting elements
+ * (b, strong, i, em, u, ins, s, strike, del, font, span, br, div, p) and safe styling attributes.
+ */
+export function sanitizeBubbleHtml(html?: string): string {
+  if (!html) return '';
+  if (typeof document === 'undefined') return html;
+
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const body = doc.body;
+    if (!body) return '';
+
+    const ALLOWED_TAGS = new Set([
+      'B',
+      'STRONG',
+      'I',
+      'EM',
+      'U',
+      'INS',
+      'S',
+      'STRIKE',
+      'DEL',
+      'FONT',
+      'SPAN',
+      'BR',
+      'DIV',
+      'P',
+    ]);
+
+    const ALLOWED_ATTRS = new Set([
+      'style',
+      'color',
+      'size',
+      'face',
+      'data-spoiler',
+      'data-original-html',
+      'data-original-text',
+    ]);
+
+    const sanitizeElement = (el: HTMLElement) => {
+      const tag = el.tagName.toUpperCase();
+
+      if (!ALLOWED_TAGS.has(tag)) {
+        if (
+          [
+            'SCRIPT',
+            'IFRAME',
+            'OBJECT',
+            'EMBED',
+            'SVG',
+            'STYLE',
+            'LINK',
+            'META',
+            'APPLET',
+          ].includes(tag)
+        ) {
+          el.remove();
+          return;
+        }
+        // Unwrap any other tags (e.g. <a>, <table>, etc.) keeping children
+        const parent = el.parentNode;
+        if (parent) {
+          while (el.firstChild) {
+            parent.insertBefore(el.firstChild, el);
+          }
+          parent.removeChild(el);
+        }
+        return;
+      }
+
+      // Filter attributes
+      const attrs = Array.from(el.attributes);
+      for (const attr of attrs) {
+        const attrName = attr.name.toLowerCase();
+        if (attrName.startsWith('on') || !ALLOWED_ATTRS.has(attrName)) {
+          el.removeAttribute(attr.name);
+        } else if (attrName === 'style') {
+          const styleVal = attr.value;
+          if (
+            /javascript:|expression\(|behavior:|-moz-binding|vbscript:/i.test(
+              styleVal
+            )
+          ) {
+            el.removeAttribute('style');
+          }
+        }
+      }
+
+      // Recurse into children
+      const children = Array.from(el.children);
+      for (const child of children) {
+        if (child instanceof HTMLElement) {
+          sanitizeElement(child);
+        }
+      }
+    };
+
+    const topElements = Array.from(body.children);
+    for (const topEl of topElements) {
+      if (topEl instanceof HTMLElement) {
+        sanitizeElement(topEl);
+      }
+    }
+
+    return body.innerHTML;
+  } catch {
+    return html;
+  }
+}
+
+/**
  * Strips inline font-family declarations from a bubble's rich HTML string
  * so whole-bubble font changes or resets apply uniformly.
  */
@@ -106,7 +219,7 @@ export function stripInlineFontFamilyFromHtml(html?: string): string | undefined
   if (!html) return html;
   if (typeof document === 'undefined') return html;
   const temp = document.createElement('div');
-  temp.innerHTML = html;
+  temp.innerHTML = sanitizeBubbleHtml(html);
   const allEls = temp.querySelectorAll('*');
   allEls.forEach((node) => {
     if (node instanceof HTMLElement) {
@@ -136,7 +249,7 @@ function restoreSpoilerElement(spoilerEl: HTMLElement): Node[] {
   // Legacy fallback if the spoiler span had its characters replaced with '■'
   if (currentText.includes('■') && originalHtml !== null) {
     const temp = document.createElement('div');
-    temp.innerHTML = originalHtml;
+    temp.innerHTML = sanitizeBubbleHtml(originalHtml);
     const restoredNodes: Node[] = [];
     while (temp.firstChild) {
       const child = temp.firstChild;
@@ -187,7 +300,7 @@ export function stripAllInlineFormattingFromHtml(html?: string): string | undefi
   if (!html) return html;
   if (typeof document === 'undefined') return html;
   const temp = document.createElement('div');
-  temp.innerHTML = html;
+  temp.innerHTML = sanitizeBubbleHtml(html);
 
   // 0. Restore any spoiler spans back to their original text before stripping formatting
   let spoilerEl = temp.querySelector('[data-spoiler="true"]') as HTMLElement | null;

@@ -7,6 +7,7 @@ import {
   getSelectionWithinBubble,
   getClampedRangeInBubble,
   setSavedSelectionRange,
+  sanitizeBubbleHtml,
 } from '../utils/richText';
 import { buildPasteContentFromClipboard } from '../utils/pasteFormatter';
 import { CloudBubbleBackground } from '../utils/cloudBubble';
@@ -368,7 +369,8 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
   useLayoutEffect(() => {
     const el = textEditableRef.current;
     if (el) {
-      const targetHtml = bubble.html || formatInitialTextToHtml(bubble.text);
+      const rawTarget = bubble.html || formatInitialTextToHtml(bubble.text);
+      const targetHtml = sanitizeBubbleHtml(rawTarget);
       const isFocused = document.activeElement === el;
       const currentClean = el.innerHTML === '<br>' ? '' : el.innerHTML;
       const targetClean = targetHtml === '<br>' ? '' : targetHtml;

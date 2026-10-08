@@ -5,18 +5,38 @@ const CUSTOM_FONTS_STORAGE_KEY = 'text_card_maker_custom_fonts';
 const cssCache = new Map<string, string>();
 const fontDataUrlCache = new Map<string, string>();
 
+function isSafeFontUrl(url: string): boolean {
+  if (!url) return false;
+  const clean = url.trim().toLowerCase();
+  return (
+    clean.startsWith('https://') ||
+    clean.startsWith('http://') ||
+    clean.startsWith('//') ||
+    clean.startsWith('/') ||
+    clean.startsWith('data:font/') ||
+    clean.startsWith('data:application/font') ||
+    clean.startsWith('data:application/x-font')
+  );
+}
+
 function injectFontElement(fontId: string, cssOrUrl: string): void {
   if (typeof document === 'undefined') return;
-  if (document.getElementById(`font-style-${fontId}`)) return;
+  const safeFontId = fontId.replace(/[^a-zA-Z0-9_-]/g, '_');
+  if (
+    document.getElementById(`font-style-${safeFontId}`) ||
+    document.getElementById(`font-style-${fontId}`)
+  ) {
+    return;
+  }
 
   const trimmed = cssOrUrl.trim();
 
   // <link ...> tag
   if (trimmed.startsWith('<link') || trimmed.includes('<link')) {
     const hrefMatch = trimmed.match(/href=["']([^"']+)["']/i);
-    if (hrefMatch && hrefMatch[1]) {
+    if (hrefMatch && hrefMatch[1] && isSafeFontUrl(hrefMatch[1])) {
       const link = document.createElement('link');
-      link.id = `font-style-${fontId}`;
+      link.id = `font-style-${safeFontId}`;
       link.rel = 'stylesheet';
       link.crossOrigin = 'anonymous';
       link.href = hrefMatch[1];
@@ -27,23 +47,25 @@ function injectFontElement(fontId: string, cssOrUrl: string): void {
 
   // Direct URL
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    const link = document.createElement('link');
-    link.id = `font-style-${fontId}`;
-    link.rel = 'stylesheet';
-    link.crossOrigin = 'anonymous';
-    link.href = trimmed;
-    document.head.appendChild(link);
-    return;
+    if (isSafeFontUrl(trimmed)) {
+      const link = document.createElement('link');
+      link.id = `font-style-${safeFontId}`;
+      link.rel = 'stylesheet';
+      link.crossOrigin = 'anonymous';
+      link.href = trimmed;
+      document.head.appendChild(link);
+      return;
+    }
   }
 
   // @import url(...) only -> convert to <link crossorigin="anonymous"> when possible
   const importOnlyMatch = trimmed.match(
     /^@import\s+(?:url\()?['"]?((?:https?:)?\/\/[^'")\s]+)['"]?\)?\s*;?$/i
   );
-  if (importOnlyMatch && importOnlyMatch[1]) {
+  if (importOnlyMatch && importOnlyMatch[1] && isSafeFontUrl(importOnlyMatch[1])) {
     const rawHref = importOnlyMatch[1];
     const link = document.createElement('link');
-    link.id = `font-style-${fontId}`;
+    link.id = `font-style-${safeFontId}`;
     link.rel = 'stylesheet';
     link.crossOrigin = 'anonymous';
     link.href = rawHref.startsWith('//') ? `https:${rawHref}` : rawHref;
@@ -52,8 +74,8 @@ function injectFontElement(fontId: string, cssOrUrl: string): void {
   }
 
   const styleEl = document.createElement('style');
-  styleEl.id = `font-style-${fontId}`;
-  styleEl.textContent = trimmed;
+  styleEl.id = `font-style-${safeFontId}`;
+  styleEl.textContent = trimmed.replace(/<\/style>/gi, '');
   document.head.appendChild(styleEl);
 }
 
@@ -124,7 +146,10 @@ export function removeCustomFont(fontId: string): void {
   } catch (err) {
     console.error('Failed to remove font from localStorage', err);
   }
-  const el = document.getElementById(`font-style-${fontId}`);
+  const safeId = fontId.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const el =
+    document.getElementById(`font-style-${safeId}`) ||
+    document.getElementById(`font-style-${fontId}`);
   if (el) el.remove();
 }
 
