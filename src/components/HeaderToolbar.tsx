@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Download,
+  Upload,
   FileText,
-  Sparkles,
+  Type,
   Copy,
   RotateCcw,
   Undo2,
   Check,
   Loader2,
-  Layers,
+  ChevronDown,
+  Image,
 } from 'lucide-react';
 import { CanvasConfig } from '../types';
 
@@ -21,8 +23,10 @@ interface HeaderToolbarProps {
   canUndo?: boolean;
   canvasConfig: CanvasConfig;
   onExportPng: () => Promise<void>;
+  onExportPdf: () => Promise<void>;
   onCopyClipboard: () => Promise<void>;
   isExporting: boolean;
+  exportingFormat?: 'png' | 'pdf' | null;
   copiedSuccess: boolean;
 }
 
@@ -34,10 +38,36 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
   onUndo,
   canUndo = false,
   onExportPng,
+  onExportPdf,
   onCopyClipboard,
   isExporting,
+  exportingFormat = null,
   copiedSuccess,
 }) => {
+  const [isSaveMenuOpen, setIsSaveMenuOpen] = useState(false);
+  const saveMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (saveMenuRef.current && !saveMenuRef.current.contains(e.target as Node)) {
+        setIsSaveMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsSaveMenuOpen(false);
+      }
+    };
+
+    if (isSaveMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isSaveMenuOpen]);
   return (
     <header
       id="app-header-toolbar"
@@ -51,9 +81,9 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           onClick={onOpenFontManager}
           title="폰트목록&추가"
           aria-label="폰트목록&추가"
-          className="flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 rounded-lg border border-amber-200 bg-amber-50/70 p-2 lg:px-3 lg:py-1.5 text-xs font-medium text-amber-900 shadow-2xs hover:bg-amber-100/70 transition cursor-pointer"
+          className="flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 rounded-lg border border-stone-200 bg-white p-2 lg:px-3 lg:py-1.5 text-xs font-medium text-stone-700 shadow-2xs hover:bg-stone-50 hover:text-stone-900 transition cursor-pointer"
         >
-          <Sparkles className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0 text-amber-700" />
+          <Type className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0 text-stone-500" />
           <span className="hidden sm:inline">폰트목록&amp;추가</span>
         </button>
 
@@ -73,12 +103,12 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           type="button"
           id="btn-open-style-preset"
           onClick={onOpenStylePresetModal}
-          title="서식 내보내기/불러오기"
-          aria-label="서식"
+          title="내보내기/불러오기"
+          aria-label="내보내기"
           className="flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 rounded-lg border border-stone-200 bg-white p-2 lg:px-3 lg:py-1.5 text-xs font-medium text-stone-700 shadow-2xs hover:bg-stone-50 hover:text-stone-900 transition cursor-pointer"
         >
-          <Layers className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0 text-stone-500" />
-          <span className="hidden sm:inline">서식</span>
+          <Upload className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0 text-stone-500" />
+          <span className="hidden sm:inline">내보내기</span>
         </button>
 
         {onUndo && (
@@ -138,27 +168,107 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
           )}
         </button>
 
-        <button
-          type="button"
-          id="btn-export-png"
-          onClick={onExportPng}
-          disabled={isExporting}
-          title={isExporting ? '저장 중...' : 'PNG 고화질 저장'}
-          aria-label={isExporting ? '저장 중...' : 'PNG 고화질 저장'}
-          className="flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 rounded-lg bg-stone-900 p-2 lg:px-4 lg:py-1.5 text-xs font-medium text-white shadow-xs hover:bg-stone-800 disabled:opacity-50 transition"
-        >
-          {isExporting ? (
-            <>
-              <Loader2 className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0 animate-spin" />
-              <span className="hidden lg:inline">저장 중...</span>
-            </>
-          ) : (
-            <>
-              <Download className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0" />
-              <span className="hidden lg:inline">PNG 고화질 저장</span>
-            </>
+        {/* '저장' 버튼 및 PNG/PDF 다운로드 드롭다운 */}
+        <div className="relative" ref={saveMenuRef}>
+          <button
+            type="button"
+            id="btn-export-save"
+            onClick={() => {
+              if (!isExporting) {
+                setIsSaveMenuOpen((prev) => !prev);
+              }
+            }}
+            disabled={isExporting}
+            title={isExporting ? '저장 중...' : '저장 (이미지 / PDF)'}
+            aria-label={isExporting ? '저장 중...' : '저장'}
+            aria-expanded={isSaveMenuOpen}
+            aria-haspopup="menu"
+            className="flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 rounded-lg bg-stone-900 p-2 sm:px-3 sm:py-2 lg:px-4 lg:py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 disabled:opacity-50 transition cursor-pointer"
+          >
+            {isExporting ? (
+              <>
+                <Loader2 className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0 animate-spin" />
+                <span className="hidden sm:inline">
+                  {exportingFormat === 'pdf' ? 'PDF 저장 중...' : '저장 중...'}
+                </span>
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0" />
+                <span className="hidden sm:inline">저장</span>
+                <ChevronDown
+                  className={`hidden sm:inline-block h-3.5 w-3.5 shrink-0 text-stone-400 transition-transform duration-200 ${
+                    isSaveMenuOpen ? 'rotate-180 text-white' : ''
+                  }`}
+                />
+              </>
+            )}
+          </button>
+
+          {/* PNG / PDF 드롭다운 메뉴 */}
+          {isSaveMenuOpen && !isExporting && (
+            <div
+              id="dropdown-save-formats"
+              role="menu"
+              aria-label="저장 형식 선택"
+              className="absolute right-0 top-full mt-1.5 w-48 sm:w-52 rounded-xl border border-stone-200 bg-white p-1.5 shadow-xl ring-1 ring-black/5 z-50 animate-in fade-in zoom-in-95 duration-100"
+            >
+              <div className="px-2.5 py-1 text-[11px] font-semibold text-stone-400 border-b border-stone-100 mb-1">
+                저장 포맷 선택
+              </div>
+
+              {/* PNG (이미지 파일) 다운로드 버튼 */}
+              <button
+                type="button"
+                id="btn-export-png"
+                role="menuitem"
+                onClick={() => {
+                  setIsSaveMenuOpen(false);
+                  void onExportPng();
+                }}
+                className="w-full flex items-center justify-between gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-stone-800 hover:bg-stone-100 active:bg-stone-200 transition group cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-stone-100 text-stone-700 group-hover:bg-amber-100 group-hover:text-amber-800 transition">
+                    <Image className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-stone-900">이미지 파일</div>
+                    <div className="text-[10px] text-stone-500">투명·웹 이미지</div>
+                  </div>
+                </div>
+                <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-mono font-medium text-stone-600">
+                  .png
+                </span>
+              </button>
+
+              {/* PDF 다운로드 버튼 */}
+              <button
+                type="button"
+                id="btn-export-pdf"
+                role="menuitem"
+                onClick={() => {
+                  setIsSaveMenuOpen(false);
+                  void onExportPdf();
+                }}
+                className="w-full flex items-center justify-between gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-stone-800 hover:bg-stone-100 active:bg-stone-200 transition group cursor-pointer mt-0.5"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-stone-100 text-stone-700 group-hover:bg-rose-100 group-hover:text-rose-800 transition">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-stone-900">PDF 문서</div>
+                    <div className="text-[10px] text-stone-500">텍스트 복사·검색 가능</div>
+                  </div>
+                </div>
+                <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-mono font-medium text-stone-600">
+                  .pdf
+                </span>
+              </button>
+            </div>
           )}
-        </button>
+        </div>
       </div>
     </header>
   );

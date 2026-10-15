@@ -1,15 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   X,
-  FileDown,
   Upload,
-  Sparkles,
+  Download,
   Check,
   RotateCcw,
   ChevronDown,
-  Layers,
 } from 'lucide-react';
 import {
+  Bubble,
   BubbleSideStyle,
   CanvasConfig,
   DefaultSideStyles,
@@ -51,6 +50,16 @@ interface StylePresetModalProps {
     customFileName?: string,
     forceDirectDownload?: boolean
   ) => Promise<'saved' | 'cancelled' | 'needs-dialog'>;
+  onExportFullProject: (
+    customFileName?: string,
+    forceDirectDownload?: boolean
+  ) => Promise<'saved' | 'cancelled' | 'needs-dialog'>;
+  onImportFullProject: (projectData: {
+    bubbles: Bubble[];
+    canvasConfig?: Partial<CanvasConfig>;
+    defaultSideStyles?: DefaultSideStyles;
+    customFonts?: WebFont[];
+  }) => void;
   onApplySideStyle: (
     side: SideKey,
     style: BubbleSideStyle,
@@ -103,6 +112,8 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
   fonts,
   onExportSidePreset,
   onExportAllPreset,
+  onExportFullProject,
+  onImportFullProject,
   onApplySideStyle,
   onApplyFullPreset,
 }) => {
@@ -172,15 +183,18 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
   );
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [exportDialogState, setExportDialogState] = useState<{
-    target: SideKey | 'all';
+    target: SideKey | 'all' | 'project';
     styleOverride?: BubbleSideStyle;
     fileName: string;
   } | null>(null);
 
-  const getDefaultExportFileName = (target: SideKey | 'all') => {
+  const getDefaultExportFileName = (target: SideKey | 'all' | 'project') => {
     const dateStr = new Date().toISOString().slice(0, 10);
+    if (target === 'project') {
+      return `작업일괄-${dateStr}`;
+    }
     if (target === 'all') {
-      return `일괄서식-${dateStr}`;
+      return `서식일괄-${dateStr}`;
     }
     const sideKor =
       target === 'left' ? '왼쪽' : target === 'center' ? '중앙' : '오른쪽';
@@ -193,7 +207,12 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
     const trimmed = fileName.trim() || getDefaultExportFileName(target);
     setExportDialogState(null);
 
-    if (target === 'all') {
+    if (target === 'project') {
+      const res = await onExportFullProject(trimmed, true);
+      if (res === 'saved') {
+        showToast('현재 작업(문자 및 서식)을 일괄 내보냈습니다.');
+      }
+    } else if (target === 'all') {
       const res = await onExportAllPreset(
         defaultSideStyles,
         canvasConfig,
@@ -201,7 +220,7 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
         true
       );
       if (res === 'saved') {
-        showToast('배경지를 포함한 전체 서식을 일괄 내보냈습니다.');
+        showToast('배경지를 포함한 서식을 내보냈습니다.');
       }
     } else {
       const res = await onExportSidePreset(
@@ -219,6 +238,47 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
             : '오른쪽 말풍선';
         showToast(`${sideLabel} 서식을 파일로 저장했습니다.`);
       }
+    }
+  };
+
+  const projectFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileForProject = async (file: File) => {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== 'object') {
+        showToast('유효한 JSON 파일이 아닙니다.');
+        return;
+      }
+
+      if (Array.isArray(parsed.bubbles)) {
+        onImportFullProject({
+          bubbles: parsed.bubbles,
+          canvasConfig: parsed.canvasConfig,
+          defaultSideStyles: parsed.defaultSideStyles,
+          customFonts: parsed.customFonts,
+        });
+        showToast('현재 작업(문자·서식)을 성공적으로 불러왔습니다.');
+        setTimeout(() => {
+          onClose();
+        }, 120);
+        return;
+      }
+
+      // If user uploaded a style preset into this button
+      const entry = await parsePresetFile(file);
+      if (entry && entry.sideStyles) {
+        onApplyFullPreset(entry.sideStyles, entry.canvasConfig, entry.customFonts);
+        showToast('서식 설정을 불러왔습니다.');
+        setTimeout(() => {
+          onClose();
+        }, 120);
+      } else {
+        showToast('말풍선 작업 데이터가 포함된 유효한 파일이 아닙니다.');
+      }
+    } catch {
+      showToast('파일을 읽는 중 오류가 발생했습니다.');
     }
   };
 
@@ -717,14 +777,14 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
         <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4 bg-stone-50/70">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
-              <Layers className="h-4 w-4" />
+              <Upload className="h-4 w-4" />
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-bold text-stone-900">
-                서식 내보내기 / 불러오기
+                내보내기 / 불러오기
               </h2>
               <p className="text-[11px] text-stone-500">
-                왼쪽·중앙·오른쪽 말풍선 서식을 개별 또는 배경지 포함 일괄 파일로 저장하고 불러옵니다.
+                말풍선 서식과 작성 중인 작업 전체를 파일로 내보내고 불러옵니다.
               </p>
             </div>
           </div>
@@ -796,29 +856,30 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
                         <span className="text-xs font-bold text-stone-800">
                           {label}
                         </span>
-                        {importedFileName && (
-                          <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
-                            <Sparkles className="h-2.5 w-2.5" />
-                            미리보기 적용됨
-                          </span>
-                        )}
                       </div>
 
                       <div className="flex items-center gap-1.5">
                         <span className="truncate max-w-[120px] rounded bg-white px-2 py-0.5 text-[10px] font-medium text-stone-600 border border-stone-200">
                           {getFontDisplayName(style.fontFamily)}
                         </span>
-                        {importedFileName && initialSnapshot && (
-                          <button
-                            type="button"
-                            onClick={() => handleRevertSlot(key)}
-                            title="불러오기 전 서식으로 되돌리기"
-                            className="inline-flex items-center gap-0.5 rounded border border-stone-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-stone-600 hover:bg-stone-100 cursor-pointer"
-                          >
-                            <RotateCcw className="h-2.5 w-2.5" />
-                            원래대로
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRevertSlot(key)}
+                          disabled={!importedFileName || !initialSnapshot}
+                          title={
+                            importedFileName
+                              ? '불러오기 전 서식으로 되돌리기'
+                              : '초기 서식 상태입니다'
+                          }
+                          aria-label={`${label} 서식 초기화`}
+                          className={`inline-flex items-center justify-center rounded border p-1 transition ${
+                            importedFileName && initialSnapshot
+                              ? 'border-stone-300 bg-white text-stone-700 hover:bg-stone-100 hover:text-stone-900 cursor-pointer shadow-2xs'
+                              : 'border-stone-200/60 bg-stone-100/40 text-stone-300 cursor-not-allowed opacity-40'
+                          }`}
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                        </button>
                       </div>
                     </div>
 
@@ -852,7 +913,7 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
                         }}
                         className="flex items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-700 shadow-2xs hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
                       >
-                        <FileDown className="h-3.5 w-3.5 text-stone-500 shrink-0" />
+                        <Upload className="h-3.5 w-3.5 text-stone-500 shrink-0" />
                         <span>내보내기</span>
                       </button>
 
@@ -873,7 +934,7 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
                         onClick={() => fileInputRefs[key].current?.click()}
                         className="flex items-center justify-center gap-1.5 rounded-xl bg-stone-900 px-3 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-stone-800 transition cursor-pointer"
                       >
-                        <Upload className="h-3.5 w-3.5 text-amber-300 shrink-0" />
+                        <Download className="h-3.5 w-3.5 text-white shrink-0" />
                         <span>불러오기</span>
                       </button>
                     </div>
@@ -994,6 +1055,7 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
           }`}
         >
           <div className="flex flex-wrap items-center justify-center gap-2.5">
+            {/* 1. 서식 전용 (말풍선 스타일 + 배경지) */}
             <button
               type="button"
               id="btn-modal-batch-export"
@@ -1003,7 +1065,7 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
                   canvasConfig
                 );
                 if (res === 'saved') {
-                  showToast('배경지를 포함한 전체 서식을 일괄 내보냈습니다.');
+                  showToast('배경지를 포함한 서식을 내보냈습니다.');
                 } else if (res === 'needs-dialog') {
                   setExportDialogState({
                     target: 'all',
@@ -1011,10 +1073,10 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
                   });
                 }
               }}
-              className="flex items-center justify-center gap-2 rounded-xl bg-stone-900 px-6 py-2.5 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-stone-800 active:scale-[0.99] transition cursor-pointer"
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-stone-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-stone-700 shadow-2xs hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
             >
-              <FileDown className="h-4 w-4 text-amber-300 shrink-0" />
-              <span>일괄 내보내기 (배경지 포함)</span>
+              <Upload className="h-4 w-4 text-stone-500 shrink-0" />
+              <span>서식 내보내기</span>
             </button>
 
             <input
@@ -1033,33 +1095,58 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
               type="button"
               id="btn-modal-batch-import"
               onClick={() => fileInputRefs.all.current?.click()}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-xs sm:text-sm font-semibold text-stone-700 shadow-2xs hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-stone-300 bg-white px-4 py-2 text-xs sm:text-sm font-semibold text-stone-700 shadow-2xs hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
             >
-              <Upload className="h-4 w-4 text-stone-500 shrink-0" />
-              <span>일괄 불러오기</span>
+              <Download className="h-4 w-4 text-stone-600 shrink-0" />
+              <span>서식 불러오기</span>
             </button>
 
-            {initialSnapshot &&
-              initialCanvasSnapshot &&
-              (importedFlags.left ||
-                importedFlags.center ||
-                importedFlags.right) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onApplyFullPreset(initialSnapshot, initialCanvasSnapshot);
-                    setImportedFlags({ left: null, center: null, right: null });
-                    showToast('모든 서식을 처음 상태로 되돌렸습니다.');
-                  }}
-                  className="flex items-center justify-center gap-1 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-xs font-medium text-stone-600 hover:bg-stone-100 cursor-pointer"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  <span>전체 원래대로</span>
-                </button>
-              )}
+            {/* 2. 현재 작업 (문자 텍스트 + 서식 + 배경지 전체 백업 및 복원) */}
+            <button
+              type="button"
+              id="btn-modal-project-export"
+              onClick={async () => {
+                const res = await onExportFullProject();
+                if (res === 'saved') {
+                  showToast('현재 작업(문자·서식·배경지)을 내보냈습니다.');
+                } else if (res === 'needs-dialog') {
+                  setExportDialogState({
+                    target: 'project',
+                    fileName: getDefaultExportFileName('project'),
+                  });
+                }
+              }}
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-stone-900 px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-stone-800 active:scale-[0.99] transition cursor-pointer"
+            >
+              <Upload className="h-4 w-4 text-white shrink-0" />
+              <span>현재 작업 내보내기</span>
+            </button>
+
+            <input
+              ref={projectFileInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                await handleFileForProject(file);
+                e.target.value = '';
+              }}
+              className="hidden"
+            />
+            <button
+              type="button"
+              id="btn-modal-project-import"
+              onClick={() => projectFileInputRef.current?.click()}
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-stone-800 px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-stone-700 active:scale-[0.99] transition cursor-pointer"
+            >
+              <Download className="h-4 w-4 text-white shrink-0" />
+              <span>현재 작업 불러오기</span>
+            </button>
           </div>
           <p className="text-[11px] text-stone-500 text-center">
-            일괄 내보내기 시 왼쪽·중앙·오른쪽 말풍선 서식과 현재 배경지 설정이 함께 저장됩니다.
+            <strong>서식 내보내기</strong>는 말풍선 서식과 배경지를 일괄 저장하며,{' '}
+            <strong>현재 작업 일괄</strong>은 작성한 문자까지 포함하여 저장합니다.
           </p>
         </div>
 
@@ -1076,10 +1163,12 @@ export const StylePresetModal: React.FC<StylePresetModalProps> = ({
               <div className="flex items-center justify-between border-b border-stone-100 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
-                    <FileDown className="h-4 w-4" />
+                    <Upload className="h-4 w-4" />
                   </div>
                   <h3 className="text-sm font-bold text-stone-900">
-                    서식 파일 내보내기
+                    {exportDialogState.target === 'project'
+                      ? '현재 작업 내보내기'
+                      : '서식 파일 내보내기'}
                   </h3>
                 </div>
                 <button

@@ -31,6 +31,7 @@ import { FontManagerModal } from './components/FontManagerModal';
 import { TextImportModal } from './components/TextImportModal';
 import { StylePresetModal } from './components/StylePresetModal';
 import { Info, Plus } from 'lucide-react';
+import { exportCardToPdf, preloadPdfFont } from './utils/pdfExport';
 
 export default function App() {
   // Load saved styles with complete defaults for left, center, right
@@ -59,6 +60,7 @@ export default function App() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isStylePresetModalOpen, setIsStylePresetModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState<'png' | 'pdf' | null>(null);
   const [copiedSuccess, setCopiedSuccess] = useState(false);
   const [zoomLevel] = useState(1);
   const [viewportWidth, setViewportWidth] = useState<number>(() =>
@@ -171,6 +173,7 @@ export default function App() {
     if (customFonts.length > 0) {
       setFonts([...PRESET_FONTS, ...customFonts]);
     }
+    preloadPdfFont();
   }, []);
 
   // Save default side styles to local storage
@@ -820,53 +823,64 @@ export default function App() {
     }));
   };
 
+  // Helper to prepare canvas and capture high-res PNG dataUrl
+  const renderCanvasToDataUrl = async (): Promise<string | null> => {
+    if (!canvasRef.current) return null;
+
+    // Ensure web fonts and rasterized paper texture are completely ready before rendering
+    if (document.fonts?.ready) {
+      await document.fonts.ready;
+    }
+    await generateRasterizedTextureTile(
+      canvasConfig.bgColor,
+      canvasConfig.paperTexture
+    );
+
+    // Small delay to ensure state and unselected borders have cleared
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    const fontEmbedCSS = await getSafeFontEmbedCSS(canvasRef.current);
+
+    const isSafari =
+      typeof navigator !== 'undefined' &&
+      /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    if (isSafari) {
+      try {
+        await toPng(canvasRef.current, {
+          quality: 0.5,
+          pixelRatio: 1,
+          fontEmbedCSS,
+          filter: (node) =>
+            typeof HTMLIFrameElement === 'undefined' ||
+            !(node instanceof HTMLIFrameElement),
+        });
+      } catch {
+        // ignore warm-up error
+      }
+    }
+
+    const dataUrl = await toPng(canvasRef.current, {
+      quality: 0.98,
+      pixelRatio: 2.5, // 2.5x sharp resolution
+      fontEmbedCSS,
+      filter: (node) =>
+        typeof HTMLIFrameElement === 'undefined' ||
+        !(node instanceof HTMLIFrameElement),
+    });
+
+    return dataUrl;
+  };
+
   // Export to high-res PNG
   const handleExportPng = async () => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || isExporting) return;
     setIsExporting(true);
+    setExportingFormat('png');
     setSelectedBubbleId(null);
 
     try {
-      // Ensure web fonts and rasterized paper texture are completely ready before rendering
-      if (document.fonts?.ready) {
-        await document.fonts.ready;
-      }
-      await generateRasterizedTextureTile(
-        canvasConfig.bgColor,
-        canvasConfig.paperTexture
-      );
-
-      // Small delay to ensure state and unselected borders have cleared
-      await new Promise((resolve) => setTimeout(resolve, 80));
-
-      const fontEmbedCSS = await getSafeFontEmbedCSS(canvasRef.current);
-
-      const isSafari =
-        typeof navigator !== 'undefined' &&
-        /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-      if (isSafari) {
-        try {
-          await toPng(canvasRef.current, {
-            quality: 0.5,
-            pixelRatio: 1,
-            fontEmbedCSS,
-            filter: (node) =>
-              typeof HTMLIFrameElement === 'undefined' ||
-              !(node instanceof HTMLIFrameElement),
-          });
-        } catch {
-          // ignore warm-up error
-        }
-      }
-
-      const dataUrl = await toPng(canvasRef.current, {
-        quality: 0.98,
-        pixelRatio: 2.5, // 2.5x sharp resolution
-        fontEmbedCSS,
-        filter: (node) =>
-          typeof HTMLIFrameElement === 'undefined' ||
-          !(node instanceof HTMLIFrameElement),
-      });
+      const dataUrl = await renderCanvasToDataUrl();
+      if (!dataUrl) return;
 
       const dateStr = new Date().toISOString().slice(0, 10);
       const link = document.createElement('a');
@@ -879,6 +893,29 @@ export default function App() {
       console.error('PNG export failed', err);
     } finally {
       setIsExporting(false);
+      setExportingFormat(null);
+    }
+  };
+
+  // Export to PDF with 2.5x high-res raster image + selectable/searchable invisible text layer
+  const handleExportPdf = async () => {
+    if (!canvasRef.current || isExporting) return;
+    setIsExporting(true);
+    setExportingFormat('pdf');
+    setSelectedBubbleId(null);
+
+    try {
+      const canvasEl = canvasRef.current;
+      const dataUrl = await renderCanvasToDataUrl();
+      if (!dataUrl) return;
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      await exportCardToPdf(canvasEl, dataUrl, `dialogue-card-${dateStr}.pdf`);
+    } catch (err) {
+      console.error('PDF export failed', err);
+    } finally {
+      setIsExporting(false);
+      setExportingFormat(null);
     }
   };
 
@@ -1125,6 +1162,86 @@ export default function App() {
     }
   };
 
+  // Export full project (.json: bubbles with text & position, canvasConfig, defaultSideStyles, customFonts)
+  const handleExportFullProject = async (
+    customFileName?: string,
+    forceDirectDownload?: boolean
+  ): Promise<'saved' | 'cancelled' | 'needs-dialog'> => {
+    try {
+      const projectData = {
+        version: 1,
+        type: 'manhwa-full-project',
+        exportedAt: new Date().toISOString(),
+        bubbles: bubbles.map((b) => ({
+          ...b,
+          customStyleKeys: b.customStyleKeys ? [...b.customStyleKeys] : undefined,
+        })),
+        canvasConfig,
+        defaultSideStyles,
+        customFonts: fonts.filter((f) => f.isCustom),
+      };
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const defaultFileName = `작업일괄-${dateStr}.json`;
+      return await saveJsonBlobWithPicker(
+        projectData,
+        defaultFileName,
+        customFileName,
+        forceDirectDownload
+      );
+    } catch (err) {
+      console.error('Failed to export full project', err);
+      return 'cancelled';
+    }
+  };
+
+  // Import full project (restores bubbles, texts, styles, canvas background)
+  const handleImportFullProject = (projectData: {
+    bubbles: Bubble[];
+    canvasConfig?: Partial<CanvasConfig>;
+    defaultSideStyles?: DefaultSideStyles;
+    customFonts?: WebFont[];
+  }) => {
+    recordHistory(false);
+
+    if (Array.isArray(projectData.customFonts) && projectData.customFonts.length > 0) {
+      for (const cf of projectData.customFonts) {
+        if (cf && cf.id && cf.name && cf.family) {
+          saveCustomFont({ ...cf, isCustom: true });
+        }
+      }
+      const loadedCustom = getStoredCustomFonts();
+      setFonts([...PRESET_FONTS, ...loadedCustom]);
+    }
+
+    if (Array.isArray(projectData.bubbles)) {
+      setBubbles(projectData.bubbles);
+      setSelectedBubbleId(null);
+    }
+
+    if (projectData.defaultSideStyles) {
+      const nextSideStyles: DefaultSideStyles = {
+        left: { ...INITIAL_SIDE_STYLES.left, ...(projectData.defaultSideStyles.left || {}) },
+        center: { ...INITIAL_SIDE_STYLES.center, ...(projectData.defaultSideStyles.center || {}) },
+        right: { ...INITIAL_SIDE_STYLES.right, ...(projectData.defaultSideStyles.right || {}) },
+      };
+      setDefaultSideStyles(nextSideStyles);
+      setSavedSideStyles(nextSideStyles);
+    }
+
+    if (projectData.canvasConfig && typeof projectData.canvasConfig === 'object') {
+      const normalizedMinHeight =
+        typeof projectData.canvasConfig.minHeight === 'number' &&
+        projectData.canvasConfig.minHeight > 500
+          ? 120
+          : projectData.canvasConfig.minHeight;
+      setCanvasConfig((prev) => ({
+        ...prev,
+        ...projectData.canvasConfig,
+        ...(normalizedMinHeight !== undefined ? { minHeight: normalizedMinHeight } : {}),
+      }));
+    }
+  };
+
   // Apply imported single side style
   const handleApplySidePreset = (
     side: 'left' | 'center' | 'right',
@@ -1259,8 +1376,10 @@ export default function App() {
         canUndo={historyStack.length > 0}
         canvasConfig={canvasConfig}
         onExportPng={handleExportPng}
+        onExportPdf={handleExportPdf}
         onCopyClipboard={handleCopyClipboard}
         isExporting={isExporting}
+        exportingFormat={exportingFormat}
         copiedSuccess={copiedSuccess}
       />
 
@@ -1440,6 +1559,8 @@ export default function App() {
         fonts={fonts}
         onExportSidePreset={handleExportSidePreset}
         onExportAllPreset={handleExportAllPreset}
+        onExportFullProject={handleExportFullProject}
+        onImportFullProject={handleImportFullProject}
         onApplySideStyle={handleApplySidePreset}
         onApplyFullPreset={handleApplyFullPreset}
       />

@@ -1,4 +1,5 @@
 import React, { forwardRef, useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Bubble, CanvasConfig, WebFont } from '../types';
 import { getColorLuminance } from '../data/presetFonts';
 import { useRasterizedPaperTexture } from '../utils/paperTexture';
@@ -517,27 +518,29 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
             )}
           </div>
 
-          {dragState && !isExporting && (
-            <div
-              style={{
-                position: 'fixed',
-                top: `${dragState.clientY + 16}px`,
-                left: `${dragState.clientX + 16}px`,
-                zIndex: 9999,
-              }}
-              className={`pointer-events-none flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold shadow-lg backdrop-blur-xs ${
-                dragState.isCopy
-                  ? 'bg-emerald-700/95 text-white ring-1 ring-emerald-400'
-                  : 'bg-stone-900/95 text-white ring-1 ring-amber-400/80'
-              }`}
-            >
-              <span>
-                {dragState.isCopy
-                  ? '말풍선 복사 모드 (Alt)'
-                  : '말풍선 위치 이동 중 (Alt 누르면 복사)'}
-              </span>
-            </div>
-          )}
+          {dragState && !isExporting && typeof document !== 'undefined' &&
+            createPortal(
+              <div
+                style={{
+                  position: 'fixed',
+                  top: `${dragState.clientY + 16}px`,
+                  left: `${dragState.clientX + 16}px`,
+                  zIndex: 99999,
+                }}
+                className={`pointer-events-none flex items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold shadow-xl backdrop-blur-xs text-center leading-snug whitespace-pre-line ${
+                  dragState.isCopy
+                    ? 'bg-emerald-700/95 text-white ring-1 ring-emerald-400'
+                    : 'bg-stone-900/95 text-white ring-1 ring-amber-400/80'
+                }`}
+              >
+                <span>
+                  {dragState.isCopy
+                    ? '말풍선 복사 모드'
+                    : '말풍선 위치 이동 중\n(Alt 누르면 복사)'}
+                </span>
+              </div>,
+              document.body
+            )}
 
           {/* Bottom Decorative Section */}
           <div className="relative w-full">

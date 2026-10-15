@@ -6,6 +6,7 @@ import {
   Trash2,
   ExternalLink,
   Sparkles,
+  Type,
   Check,
   ClipboardPaste,
 } from 'lucide-react';
@@ -270,11 +271,11 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
         <div className="flex items-center justify-between border-b border-stone-100 pb-4">
           <div>
             <h2 className="text-xl font-semibold text-stone-800 flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-amber-600" />
+              <Type className="h-5 w-5 text-stone-700" />
               폰트목록&amp;추가
             </h2>
             <p className="mt-1 text-sm text-stone-500">
-              타 사이트(눈누, 구글 폰트 등)의 웹폰트나 컴퓨터의 글꼴 파일을 추가해 바로 사용할 수 있습니다.
+              타 사이트의 웹폰트나 컴퓨터의 글꼴 파일을 추가해 사용할 수 있습니다.
             </p>
           </div>
           <button
@@ -474,7 +475,7 @@ export const FontManagerModal: React.FC<FontManagerModalProps> = ({
                   내 컴퓨터에 있는 폰트 파일 직접 등록
                 </p>
                 <p className="mt-1 leading-relaxed">
-                  보유하고 계신 <code>.ttf</code>, <code>.otf</code>, <code>.woff</code>, <code>.woff2</code> 파일을 브라우저로 직접 로드하여 사용할 수 있습니다. 외부 서버로 파일이 전송되지 않고 안전하게 현재 세션에 로드됩니다.
+                  보유 중인 <code>.ttf</code>, <code>.otf</code>, <code>.woff</code>, <code>.woff2</code> 파일을 직접 로드하여 사용합니다. 외부 서버로 파일이 전송되지 않습니다.
                 </p>
               </div>
 
