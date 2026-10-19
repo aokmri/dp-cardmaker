@@ -12,7 +12,9 @@ if (typeof window !== 'undefined') {
       if (
         name === 'SecurityError' ||
         msg.includes('Blocked a frame with origin') ||
-        msg.includes('cross-origin frame')
+        msg.includes('cross-origin frame') ||
+        msg.includes('ResizeObserver loop completed with undelivered notifications') ||
+        msg.includes('ResizeObserver loop limit exceeded')
       ) {
         event.stopImmediatePropagation();
         event.preventDefault();
@@ -31,7 +33,9 @@ if (typeof window !== 'undefined') {
       if (
         name === 'SecurityError' ||
         msg.includes('Blocked a frame with origin') ||
-        msg.includes('cross-origin frame')
+        msg.includes('cross-origin frame') ||
+        msg.includes('ResizeObserver loop completed with undelivered notifications') ||
+        msg.includes('ResizeObserver loop limit exceeded')
       ) {
         event.stopImmediatePropagation();
         event.preventDefault();

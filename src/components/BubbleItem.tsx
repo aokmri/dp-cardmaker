@@ -412,21 +412,39 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
   useEffect(() => {
     const parentEl = wrapperRef.current?.parentElement;
     let observer: ResizeObserver | null = null;
+    let rafId: number | null = null;
+
     if (parentEl && typeof ResizeObserver !== 'undefined') {
       observer = new ResizeObserver(() => {
-        fitBubbleToWrappedText();
+        if (rafId !== null) {
+          window.cancelAnimationFrame(rafId);
+        }
+        rafId = window.requestAnimationFrame(() => {
+          fitBubbleToWrappedText();
+        });
       });
       observer.observe(parentEl);
     }
 
     const fontSet = document.fonts;
-    const handleFontsLoaded = () => fitBubbleToWrappedText();
+    const handleFontsLoaded = () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      rafId = window.requestAnimationFrame(() => {
+        fitBubbleToWrappedText();
+      });
+    };
+
     if (fontSet) {
       fontSet.ready.then(handleFontsLoaded).catch(() => {});
       fontSet.addEventListener?.('loadingdone', handleFontsLoaded);
     }
 
     return () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
       observer?.disconnect();
       fontSet?.removeEventListener?.('loadingdone', handleFontsLoaded);
     };

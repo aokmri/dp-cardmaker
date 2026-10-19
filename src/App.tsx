@@ -30,8 +30,13 @@ import { MobileBottomToolbar } from './components/MobileBottomToolbar';
 import { FontManagerModal } from './components/FontManagerModal';
 import { TextImportModal } from './components/TextImportModal';
 import { StylePresetModal } from './components/StylePresetModal';
-import { Info, Plus } from 'lucide-react';
-import { exportCardToPdf, preloadPdfFont } from './utils/pdfExport';
+import { PdfExportModal } from './components/PdfExportModal';
+import { Info, Plus, Check } from 'lucide-react';
+import {
+  exportCardToPdf,
+  exportCardToSplitPdf,
+  preloadPdfFont,
+} from './utils/pdfExport';
 
 export default function App() {
   // Load saved styles with complete defaults for left, center, right
@@ -59,8 +64,19 @@ export default function App() {
   const [isFontModalOpen, setIsFontModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isStylePresetModalOpen, setIsStylePresetModalOpen] = useState(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [exportingFormat, setExportingFormat] = useState<'png' | 'pdf' | null>(null);
+  const [exportingFormat, setExportingFormat] = useState<
+    'png' | 'pdf' | 'pdf-single' | 'pdf-split' | null
+  >(null);
+  const [exportToastMessage, setExportToastMessage] = useState<string | null>(null);
+
+  const showExportToast = (msg: string) => {
+    setExportToastMessage(msg);
+    setTimeout(() => {
+      setExportToastMessage((prev) => (prev === msg ? null : prev));
+    }, 3200);
+  };
   const [copiedSuccess, setCopiedSuccess] = useState(false);
   const [zoomLevel] = useState(1);
   const [viewportWidth, setViewportWidth] = useState<number>(() =>
@@ -824,7 +840,7 @@ export default function App() {
   };
 
   // Helper to prepare canvas and capture high-res PNG dataUrl
-  const renderCanvasToDataUrl = async (): Promise<string | null> => {
+  const renderCanvasToDataUrl = async (customPixelRatio?: number): Promise<string | null> => {
     if (!canvasRef.current) return null;
 
     // Ensure web fonts and rasterized paper texture are completely ready before rendering
@@ -836,8 +852,8 @@ export default function App() {
       canvasConfig.paperTexture
     );
 
-    // Small delay to ensure state and unselected borders have cleared
-    await new Promise((resolve) => setTimeout(resolve, 80));
+    // Small delay to ensure state, selection borders, and scaling styles are completely settled
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     const fontEmbedCSS = await getSafeFontEmbedCSS(canvasRef.current);
 
@@ -859,9 +875,11 @@ export default function App() {
       }
     }
 
+    const pixelRatio = customPixelRatio ?? 2.5;
+
     const dataUrl = await toPng(canvasRef.current, {
       quality: 0.98,
-      pixelRatio: 2.5, // 2.5x sharp resolution
+      pixelRatio,
       fontEmbedCSS,
       filter: (node) =>
         typeof HTMLIFrameElement === 'undefined' ||
@@ -879,7 +897,7 @@ export default function App() {
     setSelectedBubbleId(null);
 
     try {
-      const dataUrl = await renderCanvasToDataUrl();
+      const dataUrl = await renderCanvasToDataUrl(2.5);
       if (!dataUrl) return;
 
       const dateStr = new Date().toISOString().slice(0, 10);
@@ -889,30 +907,57 @@ export default function App() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      showExportToast('이미지 저장이 완료되었습니다.');
     } catch (err) {
       console.error('PNG export failed', err);
+      showExportToast('이미지 저장에 실패했습니다. 다시 시도해 주세요.');
     } finally {
       setIsExporting(false);
       setExportingFormat(null);
     }
   };
 
-  // Export to PDF with 2.5x high-res raster image + selectable/searchable invisible text layer
-  const handleExportPdf = async () => {
+  // Export to PDF (Single Page or Auto-Split Pages close to A4 with bubble protection)
+  const handleExportPdf = async (mode: 'single' | 'split' = 'split') => {
     if (!canvasRef.current || isExporting) return;
     setIsExporting(true);
-    setExportingFormat('pdf');
+    setExportingFormat(mode === 'split' ? 'pdf-split' : 'pdf-single');
     setSelectedBubbleId(null);
 
     try {
       const canvasEl = canvasRef.current;
-      const dataUrl = await renderCanvasToDataUrl();
-      if (!dataUrl) return;
-
       const dateStr = new Date().toISOString().slice(0, 10);
-      await exportCardToPdf(canvasEl, dataUrl, `dialogue-card-${dateStr}.pdf`);
+
+      if (mode === 'split') {
+        const fontEmbedCSS = await getSafeFontEmbedCSS(canvasEl);
+        const result = await exportCardToSplitPdf(
+          canvasEl,
+          null,
+          `dialogue-card-split-${dateStr}.pdf`,
+          fontEmbedCSS
+        );
+        showExportToast(
+          `PDF 분할 저장이 완료되었습니다. (총 ${result.pageCount}페이지)`
+        );
+      } else {
+        const fontEmbedCSS = await getSafeFontEmbedCSS(canvasEl);
+        const totalHeight = canvasEl.offsetHeight || 1000;
+        let dataUrl: string | null = null;
+        if (totalHeight <= 3000) {
+          dataUrl = await renderCanvasToDataUrl(2.5);
+        }
+
+        await exportCardToPdf(
+          canvasEl,
+          dataUrl,
+          `dialogue-card-${dateStr}.pdf`,
+          fontEmbedCSS
+        );
+        showExportToast('PDF 단일 페이지 저장이 완료되었습니다.');
+      }
     } catch (err) {
       console.error('PDF export failed', err);
+      showExportToast('PDF 저장에 실패했습니다. 다시 시도해 주세요.');
     } finally {
       setIsExporting(false);
       setExportingFormat(null);
@@ -1377,6 +1422,7 @@ export default function App() {
         canvasConfig={canvasConfig}
         onExportPng={handleExportPng}
         onExportPdf={handleExportPdf}
+        onOpenPdfModal={() => setIsPdfModalOpen(true)}
         onCopyClipboard={handleCopyClipboard}
         isExporting={isExporting}
         exportingFormat={exportingFormat}
@@ -1435,10 +1481,11 @@ export default function App() {
             <div
               id="canvas-scaler"
               style={{
-                transform: `scale(${effectiveZoom})`,
+                transform: isExporting ? 'none' : `scale(${effectiveZoom})`,
                 transformOrigin: 'top center',
+                transition: isExporting ? 'none' : 'transform 100ms ease',
               }}
-              className="transition-transform duration-100"
+              className={isExporting ? '' : 'transition-transform duration-100'}
             >
               <CanvasCard
                 ref={canvasRef}
@@ -1596,6 +1643,24 @@ export default function App() {
         fonts={fonts}
         onOpenFontManager={() => setIsFontModalOpen(true)}
       />
+
+      {/* PDF Export Settings Modal */}
+      <PdfExportModal
+        isOpen={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
+        onExport={handleExportPdf}
+        canvasEl={canvasRef.current}
+        isExporting={isExporting}
+        exportingFormat={exportingFormat}
+      />
+
+      {/* Global Export Toast Notification */}
+      {exportToastMessage && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-70 flex items-center gap-2 rounded-xl bg-stone-900/95 px-4 py-2.5 text-xs font-semibold text-white shadow-2xl backdrop-blur-xs ring-1 ring-white/10 animate-in fade-in slide-in-from-bottom-2 duration-150 pointer-events-none">
+          <Check className="h-4 w-4 text-emerald-400 shrink-0" />
+          <span>{exportToastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }

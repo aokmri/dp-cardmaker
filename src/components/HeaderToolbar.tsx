@@ -11,6 +11,7 @@ import {
   Loader2,
   ChevronDown,
   Image,
+  Files,
 } from 'lucide-react';
 import { CanvasConfig } from '../types';
 
@@ -23,10 +24,11 @@ interface HeaderToolbarProps {
   canUndo?: boolean;
   canvasConfig: CanvasConfig;
   onExportPng: () => Promise<void>;
-  onExportPdf: () => Promise<void>;
+  onExportPdf?: (mode: 'single' | 'split') => Promise<void>;
+  onOpenPdfModal: () => void;
   onCopyClipboard: () => Promise<void>;
   isExporting: boolean;
-  exportingFormat?: 'png' | 'pdf' | null;
+  exportingFormat?: 'png' | 'pdf' | 'pdf-single' | 'pdf-split' | null;
   copiedSuccess: boolean;
 }
 
@@ -37,8 +39,10 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
   onResetToSample,
   onUndo,
   canUndo = false,
+  canvasConfig: _canvasConfig,
   onExportPng,
-  onExportPdf,
+  onExportPdf: _onExportPdf,
+  onOpenPdfModal,
   onCopyClipboard,
   isExporting,
   exportingFormat = null,
@@ -189,7 +193,11 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
               <>
                 <Loader2 className="h-4 w-4 lg:h-3.5 lg:w-3.5 shrink-0 animate-spin" />
                 <span className="hidden sm:inline">
-                  {exportingFormat === 'pdf' ? 'PDF 저장 중...' : '저장 중...'}
+                  {exportingFormat === 'pdf-split'
+                    ? 'PDF 분할 저장 중...'
+                    : exportingFormat === 'pdf-single' || exportingFormat === 'pdf'
+                    ? 'PDF 저장 중...'
+                    : '저장 중...'}
                 </span>
               </>
             ) : (
@@ -211,7 +219,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
               id="dropdown-save-formats"
               role="menu"
               aria-label="저장 형식 선택"
-              className="absolute right-0 top-full mt-1.5 w-48 sm:w-52 rounded-xl border border-stone-200 bg-white p-1.5 shadow-xl ring-1 ring-black/5 z-50 animate-in fade-in zoom-in-95 duration-100"
+              className="absolute right-0 top-full mt-1.5 w-56 sm:w-60 rounded-xl border border-stone-200 bg-white p-1.5 shadow-xl ring-1 ring-black/5 z-50 animate-in fade-in zoom-in-95 duration-100"
             >
               <div className="px-2.5 py-1 text-[11px] font-semibold text-stone-400 border-b border-stone-100 mb-1">
                 저장 포맷 선택
@@ -242,14 +250,14 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
                 </span>
               </button>
 
-              {/* PDF 다운로드 버튼 */}
+              {/* PDF 문서 저장 설정 모달 열기 버튼 */}
               <button
                 type="button"
                 id="btn-export-pdf"
                 role="menuitem"
                 onClick={() => {
                   setIsSaveMenuOpen(false);
-                  void onExportPdf();
+                  onOpenPdfModal();
                 }}
                 className="w-full flex items-center justify-between gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-stone-800 hover:bg-stone-100 active:bg-stone-200 transition group cursor-pointer mt-0.5"
               >
@@ -259,7 +267,7 @@ export const HeaderToolbar: React.FC<HeaderToolbarProps> = ({
                   </div>
                   <div>
                     <div className="font-semibold text-stone-900">PDF 문서</div>
-                    <div className="text-[10px] text-stone-500">텍스트 복사·검색 가능</div>
+                    <div className="text-[10px] text-stone-500">단일 / 분할 페이지 설정</div>
                   </div>
                 </div>
                 <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-mono font-medium text-stone-600">
