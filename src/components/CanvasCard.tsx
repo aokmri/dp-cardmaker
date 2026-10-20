@@ -88,6 +88,20 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
     useEffect(() => {
       if (!dragState) return;
 
+      const originalTouchAction = document.body.style.touchAction;
+      const originalUserSelect = document.body.style.userSelect;
+      document.body.style.touchAction = 'none';
+      document.body.style.userSelect = 'none';
+
+      // Strictly prevent mobile OS text selection and context callout during long-press drag
+      const preventSelection = (e: Event) => {
+        if (e.cancelable) e.preventDefault();
+        window.getSelection()?.removeAllRanges();
+      };
+      window.addEventListener('selectstart', preventSelection, { capture: true });
+      document.addEventListener('selectionchange', preventSelection, { capture: true });
+      window.addEventListener('contextmenu', preventSelection, { capture: true });
+
       const computeTargetSlotAndAlign = (clientX: number, clientY: number, current: DragState) => {
         let nextIndex = current.targetIndex;
         let nextAlign = current.targetAlign;
@@ -111,7 +125,7 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
 
         const stageEl = stageRef.current || areaEl;
         const dx = Math.abs(clientX - current.startX);
-        if (stageEl && dx >= 28) {
+        if (stageEl && dx >= 24) {
           const stageRect = stageEl.getBoundingClientRect();
           if (stageRect.width > 0) {
             const relX = (clientX - stageRect.left) / stageRect.width;
@@ -171,6 +185,7 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
       const handleWindowMouseUp = (e: MouseEvent) => {
         const current = dragStateRef.current;
         updateDragState(null);
+        window.getSelection()?.removeAllRanges();
         if (!current || !current.hasMoved) return;
         const finalIsCopy = e.altKey || current.isCopy;
         if (onMoveOrCopyBubble) {
@@ -187,6 +202,7 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
         const current = dragStateRef.current;
         if (!current || e.touches.length === 0) return;
         if (e.cancelable) e.preventDefault();
+        window.getSelection()?.removeAllRanges();
         const touch = e.touches[0];
         const movedDist = Math.hypot(
           touch.clientX - current.startX,
@@ -204,11 +220,13 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
           clientY: touch.clientY,
           targetIndex: nextIndex,
           targetAlign: nextAlign,
+          isCopy: false, // Mobile touch is always move only, no copy (복사기능은 X)
           hasMoved,
         });
       };
 
       const handleWindowTouchEnd = () => {
+        window.getSelection()?.removeAllRanges();
         const current = dragStateRef.current;
         updateDragState(null);
         if (!current || !current.hasMoved) return;
@@ -217,7 +235,7 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
             current.bubbleId,
             current.targetIndex,
             current.targetAlign,
-            current.isCopy
+            false // Mobile touch is always move only, no copy (복사기능은 X)
           );
         }
       };
@@ -231,6 +249,12 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
       window.addEventListener('keyup', handleWindowKeyChange);
 
       return () => {
+        document.body.style.touchAction = originalTouchAction;
+        document.body.style.userSelect = originalUserSelect;
+        window.removeEventListener('selectstart', preventSelection, { capture: true });
+        document.removeEventListener('selectionchange', preventSelection, { capture: true });
+        window.removeEventListener('contextmenu', preventSelection, { capture: true });
+        window.getSelection()?.removeAllRanges();
         window.removeEventListener('mousemove', handleWindowMouseMove);
         window.removeEventListener('mouseup', handleWindowMouseUp);
         window.removeEventListener('touchmove', handleWindowTouchMove);
@@ -269,7 +293,20 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
           const target = e.target as HTMLElement;
           pointerDownInsideBubbleRef.current = Boolean(
             target.closest('[id^="bubble-container-"]') ||
-              target.closest('#floating-text-toolbar')
+              target.closest('#floating-text-toolbar') ||
+              target.closest('[id^="bubble-actions-"]') ||
+              target.closest('#mobile-bubble-actions-fab') ||
+              target.closest('#btn-add-bubble-fab')
+          );
+        }}
+        onTouchStartCapture={(e) => {
+          const target = e.target as HTMLElement;
+          pointerDownInsideBubbleRef.current = Boolean(
+            target.closest('[id^="bubble-container-"]') ||
+              target.closest('#floating-text-toolbar') ||
+              target.closest('[id^="bubble-actions-"]') ||
+              target.closest('#mobile-bubble-actions-fab') ||
+              target.closest('#btn-add-bubble-fab')
           );
         }}
         onClick={(e) => {
@@ -294,7 +331,9 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
           paddingBottom: `${outerPadY}px`,
           isolation: 'isolate',
         }}
-        className="relative flex flex-col justify-between overflow-hidden shadow-xl transition-all select-none"
+        className={`relative flex flex-col justify-between ${
+          isExporting ? 'overflow-hidden' : 'overflow-visible'
+        } shadow-xl transition-all select-none`}
       >
         {/* 0. 사용자 기기에서 선택한 카드 배경 이미지 */}
         {config.bgImageUrl && (
@@ -501,6 +540,7 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
                       isDragCopyMode={Boolean(
                         dragState?.bubbleId === bubble.id && dragState?.isCopy
                       )}
+                      isAnyBubbleBeingDragged={dragState !== null}
                       canvasWidth={config.width}
                       fonts={fonts}
                       isExporting={isExporting}
@@ -523,11 +563,14 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
               <div
                 style={{
                   position: 'fixed',
-                  top: `${dragState.clientY + 16}px`,
-                  left: `${dragState.clientX + 16}px`,
+                  top: `${Math.max(10, dragState.clientY - 42)}px`,
+                  left: `${Math.min(
+                    typeof window !== 'undefined' ? window.innerWidth - 140 : 200,
+                    Math.max(12, dragState.clientX - 55)
+                  )}px`,
                   zIndex: 99999,
                 }}
-                className={`pointer-events-none flex items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold shadow-xl backdrop-blur-xs text-center leading-snug whitespace-pre-line ${
+                className={`pointer-events-none flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-semibold shadow-xl backdrop-blur-xs text-center leading-snug whitespace-pre-line ${
                   dragState.isCopy
                     ? 'bg-emerald-700/95 text-white ring-1 ring-emerald-400'
                     : 'bg-stone-900/95 text-white ring-1 ring-amber-400/80'
@@ -535,8 +578,8 @@ export const CanvasCard = forwardRef<HTMLDivElement, CanvasCardProps>(
               >
                 <span>
                   {dragState.isCopy
-                    ? '말풍선 복사 모드'
-                    : '말풍선 위치 이동 중\n(Alt 누르면 복사)'}
+                    ? '말풍선 복사 모드 (+Alt)'
+                    : '말풍선 위치 이동 중'}
                 </span>
               </div>,
               document.body

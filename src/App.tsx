@@ -31,7 +31,8 @@ import { FontManagerModal } from './components/FontManagerModal';
 import { TextImportModal } from './components/TextImportModal';
 import { StylePresetModal } from './components/StylePresetModal';
 import { PdfExportModal } from './components/PdfExportModal';
-import { Info, Plus, Check } from 'lucide-react';
+import { Info, Plus, Check, ArrowLeftRight, Image as ImageIcon, Copy, Trash2 } from 'lucide-react';
+import { processUploadedImageFile } from './utils/imageHandler';
 import {
   exportCardToPdf,
   exportCardToSplitPdf,
@@ -545,6 +546,36 @@ export default function App() {
       return next;
     });
     setSelectedBubbleId(duplicated.id);
+  };
+
+  // Toggle bubble alignment for mobile action bar (left -> right -> center -> left)
+  const handleToggleAlign = (id: string) => {
+    const bubble = bubbles.find((b) => b.id === id);
+    if (!bubble) return;
+    const nextAlign =
+      bubble.align === 'left' ? 'right' : bubble.align === 'right' ? 'center' : 'left';
+    handleUpdateBubble(id, { align: nextAlign });
+  };
+
+  const mobileImageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleMobileImageUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedBubbleId) return;
+    try {
+      const { dataUrl, width, height } = await processUploadedImageFile(file);
+      handleUpdateBubble(selectedBubbleId, {
+        imageUrl: dataUrl,
+        imageWidth: width,
+        imageHeight: height,
+      });
+    } catch (err) {
+      console.error('Failed to process mobile image:', err);
+    } finally {
+      if (e.target) e.target.value = '';
+    }
   };
 
   // Move or duplicate bubble via long-press drag (and Alt+drag copy)
@@ -1441,7 +1472,20 @@ export default function App() {
               const target = e.target as HTMLElement;
               stagePointerDownInsideBubbleRef.current = Boolean(
                 target.closest('[id^="bubble-container-"]') ||
-                  target.closest('#floating-text-toolbar')
+                  target.closest('#floating-text-toolbar') ||
+                  target.closest('[id^="bubble-actions-"]') ||
+                  target.closest('#mobile-bubble-actions-fab') ||
+                  target.closest('#btn-add-bubble-fab')
+              );
+            }}
+            onTouchStartCapture={(e) => {
+              const target = e.target as HTMLElement;
+              stagePointerDownInsideBubbleRef.current = Boolean(
+                target.closest('[id^="bubble-container-"]') ||
+                  target.closest('#floating-text-toolbar') ||
+                  target.closest('[id^="bubble-actions-"]') ||
+                  target.closest('#mobile-bubble-actions-fab') ||
+                  target.closest('#btn-add-bubble-fab')
               );
             }}
             onClick={() => {
@@ -1517,17 +1561,129 @@ export default function App() {
             </p>
           </main>
 
-          {/* Twitter-style Floating Circular (+) Button at bottom-right of Canvas */}
-          <button
-            type="button"
-            id="btn-add-bubble-fab"
-            onClick={() => handleAddBubble()}
-            title="말풍선 추가"
-            aria-label="말풍선 추가"
-            className="fixed md:absolute bottom-20 right-5 md:bottom-7 md:right-7 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-stone-900 text-white shadow-lg ring-1 ring-white/15 hover:bg-stone-800 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+          {/* Bottom-right Floating Action Bar: Mobile auxiliary options (위치, 이미지, 복사, 삭제) + (+) Add Button */}
+          <div
+            id="mobile-bubble-actions-fab"
+            className="fixed md:absolute bottom-20 right-3 sm:right-5 md:bottom-7 md:right-7 z-30 flex items-center gap-1.5 sm:gap-2 pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
           >
-            <Plus className="h-6 w-6 stroke-[2.5]" />
-          </button>
+            {/* Hidden file input for mobile image insertion */}
+            <input
+              type="file"
+              ref={mobileImageInputRef}
+              accept="image/*,.webp"
+              onChange={handleMobileImageUpload}
+              className="hidden"
+            />
+
+            {/* Mobile Auxiliary Option Buttons (visible when a bubble is clicked/selected and text input cursor is active) */}
+            {selectedBubble && !isExporting && (
+              <div className="flex md:hidden items-center gap-1.5 sm:gap-2 animate-in fade-in slide-in-from-right-3 duration-200">
+                {/* 1. 위치 (정렬 전환) */}
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleAlign(selectedBubble.id);
+                  }}
+                  title="말풍선 위치 (좌측/우측/중앙 정렬)"
+                  aria-label="말풍선 위치"
+                  className="flex h-11 w-11 sm:h-12 sm:w-12 flex-col items-center justify-center rounded-full bg-stone-900 text-white shadow-lg ring-1 ring-white/15 hover:bg-stone-800 active:scale-95 transition-all cursor-pointer select-none"
+                >
+                  <ArrowLeftRight className="h-4 w-4 shrink-0" />
+                  <span className="text-[9px] font-medium leading-none mt-0.5">
+                    {selectedBubble.align === 'left'
+                      ? '좌측'
+                      : selectedBubble.align === 'right'
+                      ? '우측'
+                      : '중앙'}
+                  </span>
+                </button>
+
+                {/* 2. 이미지 삽입/변경 */}
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    mobileImageInputRef.current?.click();
+                  }}
+                  title="이미지 삽입 (WebP/PNG/JPG 지원, 가로 최대 400px 자동 축소)"
+                  aria-label="말풍선 이미지"
+                  className={`flex h-11 w-11 sm:h-12 sm:w-12 flex-col items-center justify-center rounded-full shadow-lg ring-1 transition-all cursor-pointer select-none active:scale-95 ${
+                    selectedBubble.imageUrl
+                      ? 'bg-amber-600 text-white ring-amber-400/50 hover:bg-amber-500'
+                      : 'bg-stone-900 text-white ring-white/15 hover:bg-stone-800'
+                  }`}
+                >
+                  <ImageIcon className="h-4 w-4 shrink-0" />
+                  <span className="text-[9px] font-medium leading-none mt-0.5">이미지</span>
+                </button>
+
+                {/* 3. 복사 */}
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDuplicateBubble(selectedBubble.id);
+                  }}
+                  title="말풍선 복제"
+                  aria-label="말풍선 복제"
+                  className="flex h-11 w-11 sm:h-12 sm:w-12 flex-col items-center justify-center rounded-full bg-stone-900 text-white shadow-lg ring-1 ring-white/15 hover:bg-stone-800 active:scale-95 transition-all cursor-pointer select-none"
+                >
+                  <Copy className="h-4 w-4 shrink-0" />
+                  <span className="text-[9px] font-medium leading-none mt-0.5">복사</span>
+                </button>
+
+                {/* 4. 삭제 */}
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteBubble(selectedBubble.id);
+                  }}
+                  title="말풍선 삭제"
+                  aria-label="말풍선 삭제"
+                  className="flex h-11 w-11 sm:h-12 sm:w-12 flex-col items-center justify-center rounded-full bg-stone-900 text-rose-300 shadow-lg ring-1 ring-white/15 hover:bg-stone-800 active:scale-95 transition-all cursor-pointer select-none"
+                >
+                  <Trash2 className="h-4 w-4 shrink-0 text-rose-300" />
+                  <span className="text-[9px] font-medium leading-none mt-0.5 text-rose-200">삭제</span>
+                </button>
+              </div>
+            )}
+
+            {/* 5. (+) 말풍선 추가 버튼 */}
+            <button
+              type="button"
+              id="btn-add-bubble-fab"
+              onClick={() => handleAddBubble()}
+              title="말풍선 추가"
+              aria-label="말풍선 추가"
+              className="flex h-11 w-11 sm:h-12 sm:w-12 md:h-14 md:w-14 flex-col md:flex-row items-center justify-center rounded-full bg-stone-900 text-white shadow-lg ring-1 ring-white/15 hover:bg-stone-800 hover:scale-105 active:scale-95 transition-all cursor-pointer select-none"
+            >
+              <Plus className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 stroke-[2.5]" />
+              <span className="text-[9px] font-medium leading-none mt-0.5 md:hidden">추가</span>
+            </button>
+          </div>
         </div>
 
         {/* Right Inspector Panel (Desktop >= md) */}

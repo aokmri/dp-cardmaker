@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react';
-import { Trash2, Copy, ArrowLeftRight, GripVertical } from 'lucide-react';
+import { Trash2, Copy, ArrowLeftRight, GripVertical, Image as ImageIcon } from 'lucide-react';
 import { Bubble, WebFont } from '../types';
 import { FloatingTextToolbar } from './FloatingTextToolbar';
 import {
@@ -11,6 +11,7 @@ import {
 } from '../utils/richText';
 import { buildPasteContentFromClipboard } from '../utils/pasteFormatter';
 import { CloudBubbleBackground } from '../utils/cloudBubble';
+import { processUploadedImageFile } from '../utils/imageHandler';
 
 interface BubbleItemProps {
   bubble: Bubble;
@@ -27,6 +28,7 @@ interface BubbleItemProps {
   ) => void;
   isBeingDragged?: boolean;
   isDragCopyMode?: boolean;
+  isAnyBubbleBeingDragged?: boolean;
   canvasWidth?: number;
   fonts?: WebFont[];
   isExporting?: boolean;
@@ -51,6 +53,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
   onStartLongPressDrag,
   isBeingDragged = false,
   isDragCopyMode = false,
+  isAnyBubbleBeingDragged = false,
   canvasWidth,
   fonts = [],
   isExporting = false,
@@ -59,6 +62,8 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
   const bubbleBoxRef = useRef<HTMLDivElement>(null);
   const textEditableRef = useRef<HTMLDivElement>(null);
   const insideMetaRef = useRef<HTMLDivElement>(null);
+  const bubbleImageRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const isTextDraggingRef = useRef<boolean>(false);
@@ -78,6 +83,23 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     y: number;
   }>({ x: 0, y: 0 });
   const [isDraggingActionBar, setIsDraggingActionBar] = useState(false);
+
+  const handleImageFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const { dataUrl, width, height } = await processUploadedImageFile(file);
+      onUpdate({
+        imageUrl: dataUrl,
+        imageWidth: width,
+        imageHeight: height,
+      });
+    } catch (err) {
+      console.error('Image upload failed:', err);
+    } finally {
+      if (e.target) e.target.value = '';
+    }
+  };
 
   const handleActionBarPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -137,6 +159,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
       longPressTimerRef.current = null;
     }
     pointerStartRef.current = null;
+    isPointerDownInBubbleRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -225,14 +248,10 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     const target = e.target as HTMLElement;
     if (
       target.closest(`#bubble-actions-${bubble.id}`) ||
-      target.closest('#floating-text-toolbar')
+      target.closest('#floating-text-toolbar') ||
+      target.closest('#mobile-bubble-actions-fab') ||
+      target.closest('#btn-add-bubble-fab')
     ) {
-      return;
-    }
-
-    const activeSel = window.getSelection();
-    if (activeSel && !activeSel.isCollapsed && activeSel.toString().length > 0) {
-      clearLongPressTimer();
       return;
     }
 
@@ -248,21 +267,26 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
 
     longPressTimerRef.current = window.setTimeout(() => {
       longPressTimerRef.current = null;
-      const sel = window.getSelection();
-      if (
-        isTextDraggingRef.current ||
-        (sel && !sel.isCollapsed && sel.toString().length > 0)
-      ) {
+      // If user moved significantly across text, do not initiate bubble move
+      if (isTextDraggingRef.current) {
         return;
       }
       if (onStartLongPressDrag) {
+        // Clear automatic word selection that mobile OS triggers upon holding finger down
         window.getSelection()?.removeAllRanges();
         textEditableRef.current?.blur();
         setFloatingToolbarPos(null);
         onSelect();
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try {
+            navigator.vibrate(40);
+          } catch {
+            // ignore
+          }
+        }
         onStartLongPressDrag(bubble.id, startX, startY, false);
       }
-    }, 420);
+    }, 360);
   };
 
   const handleTouchMoveBeforeLongPress = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -271,11 +295,8 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     const touch = e.touches[0];
     const dx = touch.clientX - pointerStartRef.current.x;
     const dy = touch.clientY - pointerStartRef.current.y;
-    const sel = window.getSelection();
-    if (
-      Math.hypot(dx, dy) > 8 ||
-      (sel && !sel.isCollapsed && sel.toString().length > 0)
-    ) {
+    // Allow small finger wobble / slop on mobile touchscreens (up to 14px)
+    if (Math.hypot(dx, dy) > 14) {
       isTextDraggingRef.current = true;
       clearLongPressTimer();
     }
@@ -326,19 +347,31 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     const metaWidth = metaEl ? metaEl.offsetWidth : 0;
     const plainContent = (textEl.innerText || '').replace(/\n/g, '').trim();
 
+    const imgEl = bubbleImageRef.current;
+    const imgWidth = imgEl
+      ? imgEl.offsetWidth
+      : bubble.imageUrl && bubble.imageWidth
+      ? Math.min(400, bubble.imageWidth)
+      : 0;
+
+    const borderExtra = bubble.hasBorder ? 2 : 0;
+
     if (plainContent.length === 0) {
-      const borderExtra = bubble.hasBorder ? 2 : 0;
-      const rawScrollWidth = Math.max(0, (textEl.scrollWidth || 0) - activePadX * 2);
-      const placeholderWidth = Math.ceil(rawScrollWidth || bubble.fontSize * 4.8);
-      const minEmptyInnerWidth = isExporting
-        ? Math.max(metaWidth, 24)
-        : Math.max(metaWidth, placeholderWidth);
-      boxEl.style.width = `${minEmptyInnerWidth + activePadX * 2 + borderExtra}px`;
+      if (imgWidth > 0) {
+        const requiredInnerWidth = Math.max(metaWidth, imgWidth);
+        boxEl.style.width = `${requiredInnerWidth + activePadX * 2 + borderExtra}px`;
+      } else {
+        const rawScrollWidth = Math.max(0, (textEl.scrollWidth || 0) - activePadX * 2);
+        const placeholderWidth = Math.ceil(rawScrollWidth || bubble.fontSize * 4.8);
+        const minEmptyInnerWidth = isExporting
+          ? Math.max(metaWidth, 24)
+          : Math.max(metaWidth, placeholderWidth);
+        boxEl.style.width = `${minEmptyInnerWidth + activePadX * 2 + borderExtra}px`;
+      }
     } else if (minLeft < Infinity && maxRight > minLeft) {
       const tightTextWidth = (maxRight - minLeft) / scale;
-      const requiredInnerWidth = Math.max(tightTextWidth, metaWidth);
+      const requiredInnerWidth = Math.max(tightTextWidth, metaWidth, imgWidth);
       if (requiredInnerWidth > 0 && requiredInnerWidth < elClientWidth - 1) {
-        const borderExtra = bubble.hasBorder ? 2 : 0;
         let targetBoxWidth =
           Math.ceil(requiredInnerWidth + 1) + activePadX * 2 + borderExtra;
         boxEl.style.width = `${targetBoxWidth}px`;
@@ -352,6 +385,9 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
           }
         }
       }
+    } else if (imgWidth > 0) {
+      const requiredInnerWidth = Math.max(metaWidth, imgWidth);
+      boxEl.style.width = `${requiredInnerWidth + activePadX * 2 + borderExtra}px`;
     }
 
     const measuredW = boxEl.offsetWidth;
@@ -363,7 +399,16 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
           : { width: measuredW, height: measuredH }
       );
     }
-  }, [bubble.bubbleShape, bubble.cloudPaddingX, bubble.fontSize, bubble.hasBorder, bubble.paddingX, isExporting]);
+  }, [
+    bubble.bubbleShape,
+    bubble.cloudPaddingX,
+    bubble.fontSize,
+    bubble.hasBorder,
+    bubble.imageUrl,
+    bubble.imageWidth,
+    bubble.paddingX,
+    isExporting,
+  ]);
 
   // Sync initial or updated html into contentEditable without interrupting typing, then fit width
   useLayoutEffect(() => {
@@ -382,6 +427,10 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
   }, [
     bubble.html,
     bubble.text,
+    bubble.imageUrl,
+    bubble.imageWidth,
+    bubble.imageHeight,
+    bubble.imagePosition,
     bubble.fontFamily,
     bubble.fontSize,
     bubble.isBold,
@@ -628,6 +677,29 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const items = e.clipboardData?.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        const itemType = items[i].type || '';
+        if (itemType.indexOf('image') !== -1 || itemType.includes('webp')) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            processUploadedImageFile(file)
+              .then(({ dataUrl, width, height }) => {
+                onUpdate({
+                  imageUrl: dataUrl,
+                  imageWidth: width,
+                  imageHeight: height,
+                });
+              })
+              .catch((err) => console.error('Image paste failed:', err));
+            return;
+          }
+        }
+      }
+    }
+
     e.preventDefault();
     const htmlData = e.clipboardData.getData('text/html');
     const plainText = e.clipboardData.getData('text/plain');
@@ -739,6 +811,39 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     (bubble.metaTheme || 'inside') === 'inside' &&
     Boolean(bubble.speaker?.trim() || bubble.dateText?.trim());
 
+  const hasImage = Boolean(bubble.imageUrl);
+  const isImageTop = hasImage && bubble.imagePosition !== 'bottom';
+  const isImageBottom = hasImage && bubble.imagePosition === 'bottom';
+
+  // Extra top padding for attached image to give more top breathing room and equalize top/bottom margins
+  const imageExtraPadY = 5;
+  const bubbleImagePadY = Math.max(effectivePaddingY + imageExtraPadY, 13);
+
+  const containerPaddingTop = hasImage
+    ? bubbleImagePadY
+    : effectivePaddingY;
+  const containerPaddingBottom = hasImage
+    ? bubbleImagePadY
+    : effectivePaddingY;
+
+  const textMarginTop = hasImage
+    ? 0
+    : -effectivePaddingY;
+
+  const textPaddingTop = hasImage
+    ? 0
+    : effectivePaddingY;
+
+  const textMarginBottom = hasImage
+    ? 0
+    : hasInsideMeta ? 0 : -effectivePaddingY;
+
+  const textPaddingBottom = hasImage
+    ? 0
+    : hasInsideMeta ? 0 : effectivePaddingY;
+
+  const isTextSelectBlocked = isBeingDragged || isAnyBubbleBeingDragged;
+
   const textStyle: React.CSSProperties = {
     fontFamily: bubble.fontFamily,
     fontSize: `${bubble.fontSize}px`,
@@ -749,8 +854,8 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     textAlign: bubble.textAlign,
     letterSpacing: bubble.letterSpacing ? `${bubble.letterSpacing}px` : 'normal',
     lineHeight: bubble.lineHeight || 1.6,
-    minHeight: `${minLineHeightPx}px`,
-    minWidth: !isExporting && isBubbleTextEmpty ? '64px' : '12px',
+    minHeight: hasImage && isBubbleTextEmpty ? '0px' : `${minLineHeightPx}px`,
+    minWidth: !isExporting && isBubbleTextEmpty && !hasImage ? '64px' : '12px',
     whiteSpace: 'pre-wrap',
     wordBreak: 'keep-all',
     overflowWrap: 'break-word',
@@ -758,25 +863,27 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     boxSizing: 'content-box',
     marginLeft: `-${effectivePaddingX}px`,
     marginRight: `-${effectivePaddingX}px`,
-    marginTop: `-${effectivePaddingY}px`,
-    marginBottom: hasInsideMeta ? 0 : `-${effectivePaddingY}px`,
+    marginTop: `${textMarginTop}px`,
+    marginBottom: `${textMarginBottom}px`,
     paddingLeft: `${effectivePaddingX}px`,
     paddingRight: `${effectivePaddingX}px`,
-    paddingTop: `${effectivePaddingY}px`,
-    paddingBottom: hasInsideMeta ? 0 : `${effectivePaddingY}px`,
-    display: 'block',
+    paddingTop: `${textPaddingTop}px`,
+    paddingBottom: `${textPaddingBottom}px`,
+    display: hasImage && isBubbleTextEmpty && isExporting ? 'none' : 'block',
     outline: 'none',
-    cursor: 'text',
-    userSelect: 'text',
-    WebkitUserSelect: 'text',
+    cursor: isTextSelectBlocked ? 'grab' : 'text',
+    userSelect: isTextSelectBlocked ? 'none' : 'text',
+    WebkitUserSelect: isTextSelectBlocked ? 'none' : 'text',
+    WebkitTouchCallout: isTextSelectBlocked ? 'none' : undefined,
     transform: bubble.textOffsetY ? `translateY(${bubble.textOffsetY}px)` : undefined,
+    order: 1,
   };
 
   const bubbleContainerStyle: React.CSSProperties = {
     backgroundColor: isCloudShape ? 'transparent' : bubble.bgColor,
     borderRadius: isCloudShape ? `${effectiveBorderRadius}px` : getBorderRadius(),
-    paddingTop: `${effectivePaddingY}px`,
-    paddingBottom: `${effectivePaddingY}px`,
+    paddingTop: `${containerPaddingTop}px`,
+    paddingBottom: `${containerPaddingBottom}px`,
     paddingLeft: `${effectivePaddingX}px`,
     paddingRight: `${effectivePaddingX}px`,
     boxShadow: isCloudShape ? 'none' : getBoxShadow(),
@@ -787,6 +894,8 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     width: 'max-content',
     maxWidth: '100%',
     boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'column',
   };
 
   const wrapperStyle: React.CSSProperties = {
@@ -838,7 +947,9 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
             width: 'max-content',
             transform: `translate(${actionBarOffset.x}px, ${actionBarOffset.y}px)`,
           }}
-          className={`hidden md:flex w-max flex-nowrap absolute -top-10 left-0 z-50 items-center gap-1 whitespace-nowrap rounded-lg border bg-white/95 px-1.5 py-1 shadow-md backdrop-blur-xs text-xs text-stone-600 print:hidden ${
+          className={`hidden md:flex w-max flex-nowrap absolute -top-10 ${
+            bubble.align === 'right' ? 'right-0' : 'left-0'
+          } z-50 items-center gap-1 whitespace-nowrap rounded-lg border bg-white/95 px-1.5 py-1 shadow-md backdrop-blur-xs text-xs text-stone-600 print:hidden ${
             isDraggingActionBar
               ? 'border-amber-500 ring-2 ring-amber-400/40 shadow-lg'
               : 'border-stone-200'
@@ -874,6 +985,43 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
                 : '중앙'}
             </span>
           </button>
+          <div className="h-3 w-[1px] shrink-0 bg-stone-200" />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              fileInputRef.current?.click();
+            }}
+            className={`flex items-center gap-1 whitespace-nowrap shrink-0 rounded px-1.5 py-1 transition ${
+              bubble.imageUrl
+                ? 'bg-amber-100 text-amber-900 font-semibold hover:bg-amber-200'
+                : 'hover:bg-stone-100 text-stone-700'
+            }`}
+            title="말풍선 이미지 삽입 (WebP/PNG/JPG 지원, 가로 최대 400px 자동 축소)"
+          >
+            <ImageIcon className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden sm:inline text-[11px]">
+              {bubble.imageUrl ? '이미지 변경' : '이미지'}
+            </span>
+          </button>
+          {bubble.imageUrl && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdate({
+                  imageUrl: undefined,
+                  imageWidth: undefined,
+                  imageHeight: undefined,
+                  imagePosition: undefined,
+                });
+              }}
+              className="rounded p-1 shrink-0 hover:bg-rose-50 text-rose-500 transition"
+              title="첨부 이미지 삭제"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
           <div className="h-3 w-[1px] shrink-0 bg-stone-200" />
           <button
             type="button"
@@ -1017,17 +1165,117 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
             />
           )}
 
+          {/* Attached Image inside Speech Bubble */}
+          {bubble.imageUrl && (
+            <div
+              ref={bubbleImageRef}
+              className={`relative group/bubble-img w-full select-none ${
+                isImageBottom
+                  ? !isBubbleTextEmpty ? 'mt-2' : ''
+                  : !isBubbleTextEmpty ? 'mb-2' : ''
+              }`}
+              style={{
+                order: isImageBottom ? 2 : 0,
+                zIndex: 2,
+              }}
+            >
+              <div
+                className={`flex w-full ${
+                  bubble.textAlign === 'center' || bubble.align === 'center'
+                    ? 'justify-center'
+                    : bubble.textAlign === 'right' || bubble.align === 'right'
+                    ? 'justify-end'
+                    : 'justify-start'
+                }`}
+              >
+                <div className="relative inline-block overflow-hidden rounded-lg">
+                  <img
+                    src={bubble.imageUrl}
+                    alt="말풍선 이미지"
+                    onLoad={() => {
+                      fitBubbleToWrappedText();
+                    }}
+                    style={{
+                      maxWidth: 'min(400px, 100%)',
+                      width: bubble.imageWidth ? `${Math.min(400, bubble.imageWidth)}px` : 'auto',
+                      height: 'auto',
+                      display: 'block',
+                      borderRadius: Math.max(4, Math.min(10, (bubble.borderRadius || 14) - 2)),
+                    }}
+                    className="object-contain pointer-events-none"
+                  />
+                  {isSelected && !isExporting && (
+                    <div className="absolute top-1 right-1 opacity-0 group-hover/bubble-img:opacity-100 transition-opacity flex items-center gap-1 bg-stone-900/60 p-0.5 rounded-full backdrop-blur-xs">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fileInputRef.current?.click();
+                        }}
+                        className="flex h-5 w-5 items-center justify-center rounded-full text-white hover:bg-stone-800 transition"
+                        title="이미지 변경 (최대 400px)"
+                      >
+                        <ImageIcon className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdate({
+                            imageUrl: undefined,
+                            imageWidth: undefined,
+                            imageHeight: undefined,
+                            imagePosition: undefined,
+                          });
+                        }}
+                        className="flex h-5 w-5 items-center justify-center rounded-full text-white hover:bg-rose-600 transition"
+                        title="이미지 삭제"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div
             ref={textEditableRef}
             id={`bubble-text-${bubble.id}`}
-            contentEditable={!isExporting}
+            contentEditable={!isExporting && !isTextSelectBlocked}
             suppressContentEditableWarning={true}
             draggable={false}
-            data-empty={!isExporting && isBubbleTextEmpty ? 'true' : undefined}
+            data-empty={!isExporting && isBubbleTextEmpty && !hasImage ? 'true' : undefined}
             data-placeholder="내용 입력..."
             onDragStart={(e) => e.preventDefault()}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => e.preventDefault()}
+            onDragOver={(e) => {
+              if (e.dataTransfer?.types?.includes('Files')) {
+                e.preventDefault();
+              }
+            }}
+            onDrop={(e) => {
+              const file = e.dataTransfer?.files?.[0];
+              if (
+                file &&
+                (file.type.startsWith('image/') ||
+                  /\.(webp|png|jpe?g|gif|svg|bmp|avif)$/i.test(file.name || ''))
+              ) {
+                e.preventDefault();
+                e.stopPropagation();
+                processUploadedImageFile(file)
+                  .then(({ dataUrl, width, height }) => {
+                    onUpdate({
+                      imageUrl: dataUrl,
+                      imageWidth: width,
+                      imageHeight: height,
+                    });
+                  })
+                  .catch((err) => console.error('Image drop failed:', err));
+                return;
+              }
+              e.preventDefault();
+            }}
             onBeforeInput={(e) => {
               const nativeEvent = e.nativeEvent as InputEvent;
               if (
@@ -1042,7 +1290,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
             onBlur={handleBlur}
             onMouseUp={checkSelection}
             onKeyUp={checkSelection}
-            className="select-text"
+            className={isTextSelectBlocked ? 'select-none' : 'select-text'}
             style={{ ...textStyle, position: 'relative', zIndex: 1 }}
           />
 
@@ -1053,6 +1301,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
               <div
                 className="relative z-10 mt-1.5 pt-1 border-t select-none"
                 style={{
+                  order: 3,
                   borderColor:
                     bubble.hasBorder && bubble.borderColor
                       ? bubble.borderColor
@@ -1104,6 +1353,15 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
             </span>
           )}
       </div>
+
+      {/* Hidden File Input for Image Upload (WebP, PNG, JPG, GIF etc) */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,.webp,image/webp"
+        className="hidden"
+        onChange={handleImageFileSelect}
+      />
     </div>
   );
 };

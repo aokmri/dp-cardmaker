@@ -43,6 +43,7 @@ import { BatchSideStylePanel } from './BatchSideStylePanel';
 import { FontPasteMatcher } from './FontPasteMatcher';
 import { FontSelectDropdown } from './FontSelectDropdown';
 import { applyTextareaClipboardPaste } from '../utils/pasteFormatter';
+import { processUploadedImageFile } from '../utils/imageHandler';
 
 interface InspectorPanelProps {
   selectedBubble: Bubble | null;
@@ -106,6 +107,26 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
     start: 0,
     end: 0,
   });
+  const singleImageInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const handleSingleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedBubble) return;
+    try {
+      const { dataUrl, width, height } = await processUploadedImageFile(file);
+      onUpdateBubble({
+        imageUrl: dataUrl,
+        imageWidth: width,
+        imageHeight: height,
+      });
+      setSaveSuccessMsg('말풍선에 이미지가 삽입되었습니다.');
+      setTimeout(() => setSaveSuccessMsg(null), 2000);
+    } catch (err) {
+      console.error('Image upload failed:', err);
+    } finally {
+      if (e.target) e.target.value = '';
+    }
+  };
 
   // Collapsible category states for Single Edit (개별 편집)
   const [isSingleTextOpen, setIsSingleTextOpen] = useState(true);
@@ -652,8 +673,30 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               </div>
 
               {/* 1. Direct Text Content Editor */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-stone-700">내용</label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-stone-700">내용</label>
+                  <button
+                    type="button"
+                    onClick={() => singleImageInputRef.current?.click()}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
+                      selectedBubble.imageUrl
+                        ? 'border-amber-400 bg-amber-50/90 text-amber-900 hover:bg-amber-100 shadow-2xs'
+                        : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50 hover:border-stone-300 shadow-2xs'
+                    }`}
+                    title="기기에서 이미지 선택 (WebP/PNG/JPG 지원, 가로 최대 400px 자동 축소)"
+                  >
+                    <ImageIcon className="h-3.5 w-3.5 text-stone-600" />
+                    <span>{selectedBubble.imageUrl ? '이미지 변경' : '이미지 삽입'}</span>
+                  </button>
+                  <input
+                    ref={singleImageInputRef}
+                    type="file"
+                    accept="image/*,.webp,image/webp"
+                    className="hidden"
+                    onChange={handleSingleImageUpload}
+                  />
+                </div>
                 <textarea
                   ref={contentTextareaRef}
                   rows={3}
@@ -670,17 +713,141 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       html: undefined,
                     })
                   }
-                  onPaste={(e) =>
+                  onDragOver={(e) => {
+                    if (e.dataTransfer?.types?.includes('Files')) {
+                      e.preventDefault();
+                    }
+                  }}
+                  onDrop={(e) => {
+                    const file = e.dataTransfer?.files?.[0];
+                    if (
+                      file &&
+                      (file.type.startsWith('image/') ||
+                        /\.(webp|png|jpe?g|gif|svg|bmp|avif)$/i.test(file.name || ''))
+                    ) {
+                      e.preventDefault();
+                      processUploadedImageFile(file)
+                        .then(({ dataUrl, width, height }) => {
+                          onUpdateBubble({
+                            imageUrl: dataUrl,
+                            imageWidth: width,
+                            imageHeight: height,
+                          });
+                          setSaveSuccessMsg('말풍선에 이미지가 삽입되었습니다.');
+                          setTimeout(() => setSaveSuccessMsg(null), 2000);
+                        })
+                        .catch(console.error);
+                      return;
+                    }
+                  }}
+                  onPaste={(e) => {
+                    const items = e.clipboardData?.items;
+                    if (items) {
+                      for (let i = 0; i < items.length; i++) {
+                        const itemType = items[i].type || '';
+                        if (itemType.indexOf('image') !== -1 || itemType.includes('webp')) {
+                          const file = items[i].getAsFile();
+                          if (file) {
+                            e.preventDefault();
+                            processUploadedImageFile(file)
+                              .then(({ dataUrl, width, height }) => {
+                                onUpdateBubble({
+                                  imageUrl: dataUrl,
+                                  imageWidth: width,
+                                  imageHeight: height,
+                                });
+                                setSaveSuccessMsg('클립보드 이미지가 삽입되었습니다.');
+                                setTimeout(() => setSaveSuccessMsg(null), 2000);
+                              })
+                              .catch(console.error);
+                            return;
+                          }
+                        }
+                      }
+                    }
                     applyTextareaClipboardPaste(
                       e,
                       selectedBubble.text,
                       onUpdateBubble
-                    )
-                  }
+                    );
+                  }}
                   style={{ fontFamily: selectedBubble.fontFamily }}
                   className="w-full resize-y rounded-lg border border-stone-200 p-2.5 text-xs text-stone-800 focus:border-stone-800 focus:outline-none"
-                  placeholder="대사 텍스트를 입력하세요"
+                  placeholder="대사 텍스트를 입력하세요 (이미지와 글씨 동시 삽입 가능)"
                 />
+
+                {/* Attached Image Preview & Management Card */}
+                {selectedBubble.imageUrl && (
+                  <div className="flex items-center gap-3 rounded-xl border border-stone-200 bg-stone-50/90 p-2.5">
+                    <div className="relative h-14 w-14 shrink-0 rounded-lg overflow-hidden border border-stone-200 bg-white shadow-2xs">
+                      <img
+                        src={selectedBubble.imageUrl}
+                        alt="첨부 이미지"
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[11px] font-semibold text-stone-800 truncate">
+                          삽입된 이미지
+                        </span>
+                        <span className="text-[10px] text-stone-500 font-mono">
+                          {selectedBubble.imageWidth ? `${selectedBubble.imageWidth}px` : '최대 400px'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Position toggle: Above text vs Below text */}
+                        <div className="flex items-center rounded-md border border-stone-200 bg-white p-0.5 text-[10px]">
+                          <button
+                            type="button"
+                            onClick={() => onUpdateBubble({ imagePosition: 'top' })}
+                            className={`px-1.5 py-0.5 rounded font-medium transition cursor-pointer ${
+                              (selectedBubble.imagePosition || 'top') === 'top'
+                                ? 'bg-stone-900 text-white font-semibold'
+                                : 'text-stone-600 hover:text-stone-900'
+                            }`}
+                          >
+                            글씨 위
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onUpdateBubble({ imagePosition: 'bottom' })}
+                            className={`px-1.5 py-0.5 rounded font-medium transition cursor-pointer ${
+                              selectedBubble.imagePosition === 'bottom'
+                                ? 'bg-stone-900 text-white font-semibold'
+                                : 'text-stone-600 hover:text-stone-900'
+                            }`}
+                          >
+                            글씨 아래
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => singleImageInputRef.current?.click()}
+                          className="rounded-md border border-stone-200 bg-white px-2 py-0.5 text-[10px] font-medium text-stone-700 hover:bg-stone-100 transition cursor-pointer"
+                        >
+                          변경
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onUpdateBubble({
+                              imageUrl: undefined,
+                              imageWidth: undefined,
+                              imageHeight: undefined,
+                              imagePosition: undefined,
+                            })
+                          }
+                          className="rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-600 hover:bg-rose-100 transition cursor-pointer"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Category 1: 텍스트 (폰트 / 글자 서식 & 정렬 / 글자 크기 / 글자 색상 / 글자 간격) */}

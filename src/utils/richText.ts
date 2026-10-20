@@ -1,4 +1,4 @@
-// Utility for applying rich-text formatting to selected substrings within a speech bubble
+import DOMPurify from 'dompurify';
 import { BubbleSideStyle } from '../types';
 
 let savedRange: Range | null = null;
@@ -103,111 +103,84 @@ export function recordSelection(bubbleId: string) {
  * event handlers, or unsafe tags can execute. Only allows safe formatting elements
  * (b, strong, i, em, u, ins, s, strike, del, font, span, br, div, p) and safe styling attributes.
  */
+const BUBBLE_ALLOWED_TAGS = [
+  'b',
+  'strong',
+  'i',
+  'em',
+  'u',
+  'ins',
+  's',
+  'strike',
+  'del',
+  'font',
+  'span',
+  'br',
+  'div',
+  'p',
+];
+
+const BUBBLE_ALLOWED_ATTR = [
+  'style',
+  'color',
+  'size',
+  'face',
+  'data-spoiler',
+  'data-original-html',
+  'data-original-text',
+];
+
 export function sanitizeBubbleHtml(html?: string): string {
   if (!html) return '';
-  if (typeof document === 'undefined') return html;
+  if (typeof window === 'undefined') return html;
 
   try {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    const body = doc.body;
-    if (!body) return '';
+    const cleaned = DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: BUBBLE_ALLOWED_TAGS,
+      ALLOWED_ATTR: BUBBLE_ALLOWED_ATTR,
+      FORBID_TAGS: [
+        'script',
+        'iframe',
+        'object',
+        'embed',
+        'svg',
+        'math',
+        'form',
+        'input',
+        'button',
+        'link',
+        'meta',
+        'base',
+        'applet',
+      ],
+      FORBID_ATTR: ['id', 'name'],
+      ALLOW_DATA_ATTR: false,
+      SAFE_FOR_TEMPLATES: true,
+    });
 
-    const ALLOWED_TAGS = new Set([
-      'B',
-      'STRONG',
-      'I',
-      'EM',
-      'U',
-      'INS',
-      'S',
-      'STRIKE',
-      'DEL',
-      'FONT',
-      'SPAN',
-      'BR',
-      'DIV',
-      'P',
-    ]);
-
-    const ALLOWED_ATTRS = new Set([
-      'style',
-      'color',
-      'size',
-      'face',
-      'data-spoiler',
-      'data-original-html',
-      'data-original-text',
-    ]);
-
-    const sanitizeElement = (el: HTMLElement) => {
-      const tag = el.tagName.toUpperCase();
-
-      if (!ALLOWED_TAGS.has(tag)) {
+    // Strip dangerous CSS expressions, URLs, or behavior bindings from inline style attributes
+    if (typeof document !== 'undefined' && cleaned.includes('style=')) {
+      const temp = document.createElement('div');
+      temp.innerHTML = cleaned;
+      const elementsWithStyle = temp.querySelectorAll('[style]');
+      elementsWithStyle.forEach((el) => {
+        const styleVal = el.getAttribute('style') || '';
         if (
-          [
-            'SCRIPT',
-            'IFRAME',
-            'OBJECT',
-            'EMBED',
-            'SVG',
-            'STYLE',
-            'LINK',
-            'META',
-            'APPLET',
-          ].includes(tag)
+          /javascript:|expression\(|behavior:|-moz-binding|vbscript:|url\(/i.test(
+            styleVal
+          )
         ) {
-          el.remove();
-          return;
+          el.removeAttribute('style');
         }
-        // Unwrap any other tags (e.g. <a>, <table>, etc.) keeping children
-        const parent = el.parentNode;
-        if (parent) {
-          while (el.firstChild) {
-            parent.insertBefore(el.firstChild, el);
-          }
-          parent.removeChild(el);
-        }
-        return;
-      }
-
-      // Filter attributes
-      const attrs = Array.from(el.attributes);
-      for (const attr of attrs) {
-        const attrName = attr.name.toLowerCase();
-        if (attrName.startsWith('on') || !ALLOWED_ATTRS.has(attrName)) {
-          el.removeAttribute(attr.name);
-        } else if (attrName === 'style') {
-          const styleVal = attr.value;
-          if (
-            /javascript:|expression\(|behavior:|-moz-binding|vbscript:/i.test(
-              styleVal
-            )
-          ) {
-            el.removeAttribute('style');
-          }
-        }
-      }
-
-      // Recurse into children
-      const children = Array.from(el.children);
-      for (const child of children) {
-        if (child instanceof HTMLElement) {
-          sanitizeElement(child);
-        }
-      }
-    };
-
-    const topElements = Array.from(body.children);
-    for (const topEl of topElements) {
-      if (topEl instanceof HTMLElement) {
-        sanitizeElement(topEl);
-      }
+      });
+      return temp.innerHTML;
     }
 
-    return body.innerHTML;
-  } catch {
-    return html;
+    return cleaned;
+  } catch (err) {
+    console.error('HTML sanitization error:', err);
+    // Secure fail-safe: never return un-sanitized raw html on error
+    return html.replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 }
 
@@ -367,7 +340,7 @@ export function hasInlineTextFormatting(
 ): boolean {
   if (!html || typeof document === 'undefined') return false;
   const temp = document.createElement('div');
-  temp.innerHTML = html;
+  temp.innerHTML = sanitizeBubbleHtml(html);
 
   if (temp.querySelector('[data-spoiler="true"]')) {
     return true;

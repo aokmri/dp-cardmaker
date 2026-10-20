@@ -9,6 +9,10 @@ export interface Bubble {
   id: string;
   text: string;
   html?: string; // rich-text formatted HTML for partial formatting
+  imageUrl?: string; // base64 or URL of device-inserted image
+  imageWidth?: number; // display width (max 400px)
+  imageHeight?: number; // display height with preserved aspect ratio
+  imagePosition?: 'top' | 'bottom'; // image position relative to text (default: 'top')
   showMeta?: boolean;
   speaker?: string;
   dateText?: string;

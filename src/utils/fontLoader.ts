@@ -8,9 +8,9 @@ const fontDataUrlCache = new Map<string, string>();
 function isSafeFontUrl(url: string): boolean {
   if (!url) return false;
   const clean = url.trim().toLowerCase();
+  // Strictly disallow unencrypted http:// to prevent Man-in-the-Middle and mixed-content injection
   return (
     clean.startsWith('https://') ||
-    clean.startsWith('http://') ||
     clean.startsWith('//') ||
     clean.startsWith('/') ||
     clean.startsWith('data:font/') ||
@@ -31,7 +31,7 @@ function injectFontElement(fontId: string, cssOrUrl: string): void {
 
   const trimmed = cssOrUrl.trim();
 
-  // <link ...> tag
+  // 1. <link ...> tag
   if (trimmed.startsWith('<link') || trimmed.includes('<link')) {
     const hrefMatch = trimmed.match(/href=["']([^"']+)["']/i);
     if (hrefMatch && hrefMatch[1] && isSafeFontUrl(hrefMatch[1])) {
@@ -41,35 +41,59 @@ function injectFontElement(fontId: string, cssOrUrl: string): void {
       link.crossOrigin = 'anonymous';
       link.href = hrefMatch[1];
       document.head.appendChild(link);
-      return;
+    } else {
+      console.warn('Insecure or invalid <link> font URL rejected:', trimmed);
     }
+    return;
   }
 
-  // Direct URL
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    if (isSafeFontUrl(trimmed)) {
+  // 2. Direct URL (Must be secure HTTPS)
+  if (trimmed.startsWith('https://') || trimmed.startsWith('//')) {
+    const fullUrl = trimmed.startsWith('//') ? `https:${trimmed}` : trimmed;
+    if (isSafeFontUrl(fullUrl)) {
       const link = document.createElement('link');
       link.id = `font-style-${safeFontId}`;
       link.rel = 'stylesheet';
       link.crossOrigin = 'anonymous';
-      link.href = trimmed;
+      link.href = fullUrl;
       document.head.appendChild(link);
-      return;
     }
+    return;
   }
 
-  // @import url(...) only -> convert to <link crossorigin="anonymous"> when possible
+  if (trimmed.startsWith('http://')) {
+    console.warn('Insecure HTTP font URL blocked:', trimmed);
+    return;
+  }
+
+  // 3. @import url(...) only -> convert to <link crossorigin="anonymous"> when possible
   const importOnlyMatch = trimmed.match(
     /^@import\s+(?:url\()?['"]?((?:https?:)?\/\/[^'")\s]+)['"]?\)?\s*;?$/i
   );
-  if (importOnlyMatch && importOnlyMatch[1] && isSafeFontUrl(importOnlyMatch[1])) {
+  if (importOnlyMatch && importOnlyMatch[1]) {
     const rawHref = importOnlyMatch[1];
-    const link = document.createElement('link');
-    link.id = `font-style-${safeFontId}`;
-    link.rel = 'stylesheet';
-    link.crossOrigin = 'anonymous';
-    link.href = rawHref.startsWith('//') ? `https:${rawHref}` : rawHref;
-    document.head.appendChild(link);
+    const fullHref = rawHref.startsWith('//') ? `https:${rawHref}` : rawHref;
+    if (isSafeFontUrl(fullHref)) {
+      const link = document.createElement('link');
+      link.id = `font-style-${safeFontId}`;
+      link.rel = 'stylesheet';
+      link.crossOrigin = 'anonymous';
+      link.href = fullHref;
+      document.head.appendChild(link);
+    } else {
+      console.warn('Insecure @import font URL blocked:', rawHref);
+    }
+    return;
+  }
+
+  // 4. Raw CSS (@font-face)
+  // Block dangerous CSS script execution vectors or unencrypted HTTP imports
+  if (/javascript:|expression\(|behavior:|-moz-binding/i.test(trimmed)) {
+    console.warn('Unsafe CSS expression detected and blocked in font rule');
+    return;
+  }
+  if (/@import\s+(?:url\()?['"]?http:\/\//i.test(trimmed)) {
+    console.warn('Insecure HTTP @import blocked in font rule');
     return;
   }
 
@@ -182,7 +206,10 @@ export function loadWebFontFromCss(fontId: string, fontName: string, cssInput: s
 
   // If user pasted just a URL (e.g. https://fonts.googleapis.com/css2?... or CDN)
   if (cssText.startsWith('http://') || cssText.startsWith('https://')) {
-    injectFontElement(fontId, cssText);
+    const secureUrl = cssText.startsWith('http://')
+      ? cssText.replace(/^http:\/\//i, 'https://')
+      : cssText;
+    injectFontElement(fontId, secureUrl);
 
     const webFont: WebFont = {
       id: fontId,
@@ -190,7 +217,7 @@ export function loadWebFontFromCss(fontId: string, fontName: string, cssInput: s
       family: `'${fontFamily}', sans-serif`,
       category: 'custom',
       sourceType: 'url',
-      url: cssText,
+      url: secureUrl,
       isCustom: true,
     };
     saveCustomFont(webFont);
