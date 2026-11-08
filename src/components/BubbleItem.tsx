@@ -308,6 +308,7 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     if (!textEl || !boxEl) return;
 
     // 1. Reset to max-content so the browser lays out text up to the 95% max-width limit
+    boxEl.style.maxWidth = '100%';
     boxEl.style.width = 'max-content';
 
     const activePadX =
@@ -398,6 +399,14 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
           ? prev
           : { width: measuredW, height: measuredH }
       );
+    }
+
+    const stage = document.getElementById('canvas-stage');
+    if (stage && stage.scrollLeft !== 0) {
+      stage.scrollLeft = 0;
+    }
+    if (window.scrollX !== 0) {
+      window.scrollTo(0, window.scrollY);
     }
   }, [
     bubble.bubbleShape,
@@ -705,6 +714,12 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
     const plainText = e.clipboardData.getData('text/plain');
     if (!htmlData && !plainText) return;
 
+    const stageEl = document.getElementById('canvas-stage');
+    const prevScrollTop = stageEl ? stageEl.scrollTop : 0;
+    const bubbleTopBefore = bubbleBoxRef.current
+      ? bubbleBoxRef.current.getBoundingClientRect().top
+      : null;
+
     const { fragment, lastNode } = buildPasteContentFromClipboard(
       htmlData,
       plainText
@@ -730,6 +745,34 @@ export const BubbleItem: React.FC<BubbleItemProps> = ({
         text: textEditableRef.current.innerText,
       });
     }
+
+    // Immediately restore horizontal scroll anchor if browser auto-scrolled selection horizontally
+    if (stageEl && stageEl.scrollLeft !== 0) {
+      stageEl.scrollLeft = 0;
+    }
+    if (window.scrollX !== 0) {
+      window.scrollTo(0, window.scrollY);
+    }
+
+    const stabilizeScroll = () => {
+      const stage = document.getElementById('canvas-stage');
+      if (stage && stage.scrollLeft !== 0) {
+        stage.scrollLeft = 0;
+      }
+      if (window.scrollX !== 0) {
+        window.scrollTo(0, window.scrollY);
+      }
+      // If mobile browser viewport violently jumped off-screen vertically, restore stage scrollTop
+      if (bubbleBoxRef.current && bubbleTopBefore !== null && stage) {
+        const bubbleTopAfter = bubbleBoxRef.current.getBoundingClientRect().top;
+        if (Math.abs(bubbleTopAfter - bubbleTopBefore) > 300) {
+          stage.scrollTop = prevScrollTop;
+        }
+      }
+    };
+
+    requestAnimationFrame(stabilizeScroll);
+    setTimeout(stabilizeScroll, 50);
   };
 
   const handleBlur = () => {

@@ -87,9 +87,114 @@ export default function App() {
   const [activeBatchSide, setActiveBatchSide] = useState<'left' | 'center' | 'right'>('left');
 
   useEffect(() => {
-    const handleResize = () => setViewportWidth(window.innerWidth);
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+      if (window.scrollX !== 0) {
+        window.scrollTo(0, window.scrollY);
+      }
+      const stage = document.getElementById('canvas-stage');
+      if (stage && stage.scrollLeft !== 0) {
+        stage.scrollLeft = 0;
+      }
+    };
+
+    const lockHorizontalScroll = () => {
+      if (window.scrollX !== 0) {
+        window.scrollTo(0, window.scrollY);
+      }
+      const stage = document.getElementById('canvas-stage');
+      if (stage && stage.scrollLeft !== 0) {
+        stage.scrollLeft = 0;
+      }
+    };
+
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener('scroll', lockHorizontalScroll, { passive: true });
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', lockHorizontalScroll);
+    };
+  }, []);
+
+  // Track virtual keyboard height on mobile to float round action buttons (위치, 이미지, 복사, 삭제, 추가) above the keyboard
+  const [keyboardOffset, setKeyboardOffset] = useState<number>(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const measureKeyboardOffset = () => {
+      if (window.innerWidth >= 768) {
+        setKeyboardOffset(0);
+        return;
+      }
+
+      // 1. VirtualKeyboard API (Chrome Android)
+      const nav = navigator as unknown as { virtualKeyboard?: { boundingRect?: { height?: number } } };
+      if (nav.virtualKeyboard?.boundingRect) {
+        const vkHeight = nav.virtualKeyboard.boundingRect.height;
+        if (typeof vkHeight === 'number' && vkHeight > 0) {
+          setKeyboardOffset(Math.round(vkHeight));
+          return;
+        }
+      }
+
+      // 2. window.visualViewport (iOS Safari, Android Chrome, Samsung Internet)
+      if (window.visualViewport) {
+        const vv = window.visualViewport;
+        const offsetFromBottom = Math.max(
+          0,
+          window.innerHeight - (vv.height + vv.offsetTop)
+        );
+        const simpleHeightDiff = Math.max(0, window.innerHeight - vv.height);
+        const detectedOffset = Math.max(offsetFromBottom, simpleHeightDiff);
+
+        // Mobile keyboards typically take >= 100px of screen height
+        if (detectedOffset > 100) {
+          setKeyboardOffset(Math.round(detectedOffset));
+          return;
+        }
+      }
+
+      setKeyboardOffset(0);
+    };
+
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener('resize', measureKeyboardOffset);
+      vv.addEventListener('scroll', measureKeyboardOffset);
+    }
+
+    const nav = navigator as unknown as { virtualKeyboard?: EventTarget };
+    if (nav.virtualKeyboard && typeof nav.virtualKeyboard.addEventListener === 'function') {
+      nav.virtualKeyboard.addEventListener('geometrychange', measureKeyboardOffset);
+    }
+
+    window.addEventListener('resize', measureKeyboardOffset);
+
+    // Re-measure on input/contentEditable focus transitions as the virtual keyboard animates
+    const handleFocusActivity = () => {
+      measureKeyboardOffset();
+      setTimeout(measureKeyboardOffset, 50);
+      setTimeout(measureKeyboardOffset, 150);
+      setTimeout(measureKeyboardOffset, 300);
+      setTimeout(measureKeyboardOffset, 500);
+    };
+
+    window.addEventListener('focusin', handleFocusActivity);
+    window.addEventListener('focusout', handleFocusActivity);
+
+    return () => {
+      if (vv) {
+        vv.removeEventListener('resize', measureKeyboardOffset);
+        vv.removeEventListener('scroll', measureKeyboardOffset);
+      }
+      if (nav.virtualKeyboard && typeof nav.virtualKeyboard.removeEventListener === 'function') {
+        nav.virtualKeyboard.removeEventListener('geometrychange', measureKeyboardOffset);
+      }
+      window.removeEventListener('resize', measureKeyboardOffset);
+      window.removeEventListener('focusin', handleFocusActivity);
+      window.removeEventListener('focusout', handleFocusActivity);
+    };
   }, []);
 
   const isMobileViewport = viewportWidth < 768;
@@ -1468,6 +1573,19 @@ export default function App() {
           <main
             id="canvas-stage"
             className="relative flex flex-1 min-w-0 flex-col items-center justify-start overflow-y-auto overflow-x-hidden md:overflow-x-auto p-3 pb-44 sm:p-8 md:pb-12 lg:p-12"
+            style={{
+              overscrollBehaviorX: 'none',
+              touchAction: 'pan-y',
+              paddingBottom:
+                isMobileViewport && keyboardOffset > 80
+                  ? `${keyboardOffset + 100}px`
+                  : undefined,
+            }}
+            onScroll={(e) => {
+              if (e.currentTarget.scrollLeft !== 0) {
+                e.currentTarget.scrollLeft = 0;
+              }
+            }}
             onMouseDownCapture={(e) => {
               const target = e.target as HTMLElement;
               stagePointerDownInsideBubbleRef.current = Boolean(
@@ -1521,29 +1639,50 @@ export default function App() {
               </a>
             </div>
 
-            {/* Actual Card Rendered Container */}
+            {/* Scaled Canvas Container Wrapper:
+                Limits the horizontal layout footprint on mobile to the visually scaled width.
+                This eliminates horizontal overflow so that browser selection/paste auto-scroll
+                can NEVER push the canvas sideways or off-screen. */}
             <div
-              id="canvas-scaler"
+              id="canvas-scale-wrapper"
               style={{
-                transform: isExporting ? 'none' : `scale(${effectiveZoom})`,
-                transformOrigin: 'top center',
-                transition: isExporting ? 'none' : 'transform 100ms ease',
+                width: isExporting
+                  ? `${canvasConfig.width}px`
+                  : isMobileViewport
+                  ? `${Math.round(canvasConfig.width * effectiveZoom)}px`
+                  : 'auto',
+                maxWidth: '100%',
+                display: 'flex',
+                justifyContent: 'center',
+                overflow: 'visible',
               }}
-              className={isExporting ? '' : 'transition-transform duration-100'}
+              className="relative shrink-0"
             >
-              <CanvasCard
-                ref={canvasRef}
-                config={canvasConfig}
-                bubbles={bubbles}
-                selectedBubbleId={selectedBubbleId}
-                onSelectBubble={handleSelectBubble}
-                onUpdateBubble={(id, updated) => handleUpdateBubble(id, updated)}
-                onDeleteBubble={handleDeleteBubble}
-                onDuplicateBubble={handleDuplicateBubble}
-                onMoveOrCopyBubble={handleMoveOrCopyBubble}
-                fonts={fonts}
-                isExporting={isExporting}
-              />
+              {/* Actual Card Rendered Container */}
+              <div
+                id="canvas-scaler"
+                style={{
+                  width: `${canvasConfig.width}px`,
+                  transform: isExporting ? 'none' : `scale(${effectiveZoom})`,
+                  transformOrigin: 'top center',
+                  transition: isExporting ? 'none' : 'transform 100ms ease',
+                }}
+                className={isExporting ? '' : 'transition-transform duration-100'}
+              >
+                <CanvasCard
+                  ref={canvasRef}
+                  config={canvasConfig}
+                  bubbles={bubbles}
+                  selectedBubbleId={selectedBubbleId}
+                  onSelectBubble={handleSelectBubble}
+                  onUpdateBubble={(id, updated) => handleUpdateBubble(id, updated)}
+                  onDeleteBubble={handleDeleteBubble}
+                  onDuplicateBubble={handleDuplicateBubble}
+                  onMoveOrCopyBubble={handleMoveOrCopyBubble}
+                  fonts={fonts}
+                  isExporting={isExporting}
+                />
+              </div>
             </div>
 
             {/* Footer Guide Tips */}
@@ -1564,7 +1703,17 @@ export default function App() {
           {/* Bottom-right Floating Action Bar: Mobile auxiliary options (위치, 이미지, 복사, 삭제) + (+) Add Button */}
           <div
             id="mobile-bubble-actions-fab"
-            className="fixed md:absolute bottom-20 right-3 sm:right-5 md:bottom-7 md:right-7 z-30 flex items-center gap-1.5 sm:gap-2 pointer-events-auto"
+            className="fixed md:absolute bottom-20 right-3 sm:right-5 md:bottom-7 md:right-7 z-45 flex items-center gap-1.5 sm:gap-2 pointer-events-auto"
+            style={{
+              bottom:
+                isMobileViewport && keyboardOffset > 80
+                  ? `${keyboardOffset + 14}px`
+                  : undefined,
+              transition:
+                isMobileViewport
+                  ? 'bottom 180ms cubic-bezier(0.16, 1, 0.3, 1), transform 180ms cubic-bezier(0.16, 1, 0.3, 1)'
+                  : undefined,
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Hidden file input for mobile image insertion */}
@@ -1675,6 +1824,10 @@ export default function App() {
             <button
               type="button"
               id="btn-add-bubble-fab"
+              onMouseDown={(e) => {
+                e.stopPropagation();
+              }}
+              onTouchStart={(e) => e.stopPropagation()}
               onClick={() => handleAddBubble()}
               title="말풍선 추가"
               aria-label="말풍선 추가"
